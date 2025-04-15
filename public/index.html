@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Memory Graph Visualizer</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      background-color: #121212;
+      color: #f0f0f0;
+      overflow: hidden;
+    }
+    
+    #graph-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+    
+    #info-panel {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 400px; /* Increased width */
+      background-color: rgba(20, 20, 30, 0.9); /* Darker, more opaque background */
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
+      z-index: 10;
+      max-height: 85vh;
+      overflow-y: auto;
+      display: none;
+      border: 1px solid rgba(100, 100, 255, 0.3); /* Subtle border */
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Better font */
+    }
+    
+    #info-panel h3 {
+      margin-top: 0;
+      border-bottom: 1px solid #5a5a8a;
+      padding-bottom: 12px;
+      color: #aaccff; /* Light blue heading */
+      font-size: 18px;
+    }
+    
+    #info-panel .tag {
+      display: inline-block;
+      background-color: #2a5298;
+      color: white;
+      padding: 4px 10px;
+      margin: 3px;
+      border-radius: 12px;
+      font-size: 13px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      transition: all 0.2s ease;
+    }
+    
+    #info-panel .tag:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+    }
+    
+    #info-panel .content {
+      margin-top: 15px;
+      padding: 12px;
+      background-color: rgba(40, 40, 60, 0.7);
+      border-radius: 6px;
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-wrap; /* Preserve line breaks */
+      max-height: 60vh; /* Limit height */
+      overflow-y: auto; /* Add scrollbar if needed */
+      border-left: 3px solid #4466aa; /* Left border accent */
+    }
+    
+    #controls {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      z-index: 10;
+      background-color: rgba(30, 30, 30, 0.8);
+      border-radius: 5px;
+      padding: 10px;
+    }
+    
+    button {
+      background-color: #2a5298;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      margin: 0 5px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    button:hover {
+      background-color: #3a62a8;
+    }
+    
+    .loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 18px;
+      color: #f0f0f0;
+    }
+  </style>
+  
+  <!-- Import libraries -->
+  <script src="https://unpkg.com/three@0.137.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three-spritetext@1.6.5/dist/three-spritetext.min.js"></script>
+  <script src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
+  <script src="https://unpkg.com/3d-force-graph@1.70.10/dist/3d-force-graph.min.js"></script>
+  
+  <!-- Import Three.js modules -->
+  <script src="https://unpkg.com/three@0.137.0/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://unpkg.com/three@0.137.0/examples/js/postprocessing/RenderPass.js"></script>
+  <script src="https://unpkg.com/three@0.137.0/examples/js/postprocessing/ShaderPass.js"></script>
+  <script src="https://unpkg.com/three@0.137.0/examples/js/shaders/CopyShader.js"></script>
+  <script src="https://unpkg.com/three@0.137.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+  <script src="https://unpkg.com/three@0.137.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+</head>
+<body>
+  <div id="graph-container"></div>
+  
+  <div id="info-panel">
+    <h3 id="node-id">Node Details</h3>
+    <div id="node-tags"></div>
+    <div id="node-content" class="content"></div>
+  </div>
+  
+  <div id="controls">
+    <button id="refresh-btn">Refresh Data</button>
+    <button id="toggle-bloom">Toggle Bloom Effect</button>
+  </div>
+  
+  <div class="loading" id="loading-indicator">Loading memory graph data...</div>
+  
+  <script src="js/app.js"></script>
+</body>
+</html>

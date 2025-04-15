@@ -1,0 +1,13 @@
+{
+  "name": "memory-graph-interface",
+  "version": "1.0.0",
+  "description": "A visualization tool for memory graph database",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6"
+  }
+}
