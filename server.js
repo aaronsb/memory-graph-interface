@@ -82,8 +82,15 @@ app.get('/api/tags', (req, res) => {
 
 // API endpoint to get graph data with tags as nodes
 app.get('/api/graph', (req, res) => {
-  console.log('API request received for /api/graph');
-  
+  // ...existing code unchanged...
+});
+
+/**
+ * NEW: API endpoint to get memory-centric graph (nodes = memories, links = edges, tags as array, includes cross-domain refs)
+ */
+app.get('/api/graph/memory', (req, res) => {
+  console.log('API request received for /api/graph/memory');
+
   const nodesQuery = `
     SELECT 
       n.id, 
@@ -92,117 +99,125 @@ app.get('/api/graph', (req, res) => {
       n.path
     FROM MEMORY_NODES n
   `;
-  
+
   const tagsQuery = `
     SELECT 
       t.nodeId,
       t.tag
     FROM MEMORY_TAGS t
   `;
-  
+
+  const edgesQuery = `
+    SELECT 
+      e.id,
+      e.source,
+      e.target,
+      e.type,
+      e.strength,
+      e.domain
+    FROM MEMORY_EDGES e
+  `;
+
+  const domainRefsQuery = `
+    SELECT 
+      nodeId,
+      domain,
+      targetDomain,
+      targetNodeId,
+      description,
+      bidirectional
+    FROM DOMAIN_REFS
+  `;
+
   db.all(nodesQuery, [], (err, memoryNodes) => {
     if (err) {
       console.error('Error fetching memory nodes:', err.message);
       return res.status(500).json({ error: err.message });
     }
-    
+
     db.all(tagsQuery, [], (err, tagRecords) => {
       if (err) {
         console.error('Error fetching tags:', err.message);
         return res.status(500).json({ error: err.message });
       }
-      
-      // Create a map of memory nodes for reference
-      const memoryNodeMap = {};
-      memoryNodes.forEach(node => {
-        memoryNodeMap[node.id] = {
-          id: node.id,
-          content: node.content,
-          domain: node.domain,
-          path: node.path
-        };
-      });
-      
-      // Create a map of tags and their associated memory nodes
-      const tagMap = {};
-      tagRecords.forEach(record => {
-        if (!tagMap[record.tag]) {
-          tagMap[record.tag] = {
-            id: record.tag,
-            tag: record.tag,
-            memoryNodes: []
-          };
+
+      db.all(edgesQuery, [], (err, edgeRecords) => {
+        if (err) {
+          console.error('Error fetching edges:', err.message);
+          return res.status(500).json({ error: err.message });
         }
-        
-        if (memoryNodeMap[record.nodeId]) {
-          tagMap[record.tag].memoryNodes.push(memoryNodeMap[record.nodeId]);
-        }
-      });
-      
-      // Convert tag map to array of nodes
-      const tagNodes = Object.values(tagMap);
-      
-      // Create links between tags that appear in the same memory node
-      const tagLinks = [];
-      const tagPairCounts = {}; // Track co-occurrence counts
-      
-      // First pass: count co-occurrences of tag pairs
-      memoryNodes.forEach(memoryNode => {
-        // Get all tags for this memory node
-        const nodeTags = tagRecords
-          .filter(record => record.nodeId === memoryNode.id)
-          .map(record => record.tag);
-        
-        // Count co-occurrences for each pair of tags
-        for (let i = 0; i < nodeTags.length; i++) {
-          for (let j = i + 1; j < nodeTags.length; j++) {
-            const source = nodeTags[i];
-            const target = nodeTags[j];
-            
-            // Create a unique ID for this tag pair
-            const pairId = [source, target].sort().join('-');
-            
-            if (!tagPairCounts[pairId]) {
-              tagPairCounts[pairId] = {
-                source,
-                target,
-                count: 0,
-                memoryNodes: new Set()
-              };
-            }
-            
-            tagPairCounts[pairId].count++;
-            tagPairCounts[pairId].memoryNodes.add(memoryNode.id);
+
+        db.all(domainRefsQuery, [], (err, domainRefs) => {
+          if (err) {
+            console.error('Error fetching domain refs:', err.message);
+            return res.status(500).json({ error: err.message });
           }
-        }
-      });
-      
-      // Second pass: create links with strength based on co-occurrence count
-      Object.entries(tagPairCounts).forEach(([pairId, data]) => {
-        // Calculate strength based on co-occurrence count (normalized between 0.3 and 1.0)
-        // More co-occurrences = stronger link
-        const maxCount = Math.max(...Object.values(tagPairCounts).map(d => d.count));
-        const minStrength = 0.3;
-        const maxStrength = 1.0;
-        const strength = minStrength + (data.count / maxCount) * (maxStrength - minStrength);
-        
-        tagLinks.push({
-          id: pairId,
-          source: tagMap[data.source],
-          target: tagMap[data.target],
-          type: 'co-occurrence',
-          strength: strength,
-          count: data.count,
-          memoryNodes: Array.from(data.memoryNodes)
+
+          // Attach tags to each memory node
+          const nodeMap = {};
+          memoryNodes.forEach(node => {
+            nodeMap[node.id] = {
+              id: node.id,
+              content: node.content,
+              domain: node.domain,
+              path: node.path,
+              tags: []
+            };
+          });
+          tagRecords.forEach(record => {
+            if (nodeMap[record.nodeId]) {
+              nodeMap[record.nodeId].tags.push(record.tag);
+            }
+          });
+
+          // Prepare nodes and links for the graph
+          const nodes = Object.values(nodeMap);
+          const links = edgeRecords.map(edge => ({
+            id: edge.id,
+            source: edge.source,
+            target: edge.target,
+            type: edge.type,
+            strength: edge.strength,
+            domain: edge.domain
+          }));
+
+          // Add cross-domain refs as links (type: 'cross_domain')
+          domainRefs.forEach(ref => {
+            // Only add if both nodes exist
+            if (nodeMap[ref.nodeId] && nodeMap[ref.targetNodeId]) {
+              links.push({
+                id: `crossdomain-${ref.nodeId}-${ref.targetNodeId}`,
+                source: ref.nodeId,
+                target: ref.targetNodeId,
+                type: 'cross_domain',
+                strength: 0.7,
+                domain: ref.domain,
+                targetDomain: ref.targetDomain,
+                description: ref.description
+              });
+              // If bidirectional, add reverse link
+              if (ref.bidirectional) {
+                links.push({
+                  id: `crossdomain-${ref.targetNodeId}-${ref.nodeId}`,
+                  source: ref.targetNodeId,
+                  target: ref.nodeId,
+                  type: 'cross_domain',
+                  strength: 0.7,
+                  domain: ref.targetDomain,
+                  targetDomain: ref.domain,
+                  description: ref.description
+                });
+              }
+            }
+          });
+
+          console.log(`Processed ${nodes.length} memory nodes and ${links.length} links (including cross-domain)`);
+
+          res.json({
+            nodes,
+            links
+          });
         });
-      });
-      
-      console.log(`Processed ${tagNodes.length} tag nodes and ${tagLinks.length} tag links`);
-      
-      // Return the graph data
-      res.json({
-        nodes: tagNodes,
-        links: tagLinks
       });
     });
   });

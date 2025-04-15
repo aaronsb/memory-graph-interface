@@ -33,7 +33,7 @@ function initGraph() {
     .linkColor(link => getLinkColor(link))
     // Use link strength for link opacity and width
     .linkOpacity(1.0) // Increased opacity
-    .linkCurvature(0.25) // Add curvature to links for better visibility
+    .linkCurvature(0) // No curvature, straight links
     .linkThreeObjectExtend(true)
     .linkThreeObject(link => {
       // Create text sprite for link labels
@@ -48,7 +48,12 @@ function initGraph() {
     // Use strength for force simulation with stronger parameters
     .d3Force('link', d3.forceLink()
       .id(d => d.id)
-      .distance(link => 80 / (link.strength || 0.5)) // Stronger links = closer nodes
+      .distance(link => {
+        // Stronger links = shorter distance, weaker = longer
+        // strength 1 => 50, strength 0 => 200
+        const s = typeof link.strength === 'number' ? link.strength : 0.5;
+        return 200 - 150 * s;
+      })
       .strength(link => link.strength * 2) // Multiply strength for more effect
     )
     .d3Force('charge', d3.forceManyBody()
@@ -127,7 +132,7 @@ function loadData() {
   document.getElementById('loading-indicator').style.display = 'block';
   console.log('Fetching graph data...');
   
-  fetch('/api/graph')
+  fetch('/api/graph/memory')
     .then(response => {
       console.log('Response received:', response.status);
       return response.json();
@@ -153,26 +158,30 @@ function loadData() {
 
 // Process the graph data
 function processGraphData(data) {
-  // Store the original data
+  // For memory-centric: nodes are memories, links are edges
   graphData = {
     nodes: data.nodes.map(node => ({
       ...node,
-      // Set node size based on number of associated memory nodes
-      val: node.memoryNodes ? Math.max(1, Math.min(5, node.memoryNodes.length * 0.5)) : 1
+      group: node.tags && node.tags.length > 0 ? node.tags[0] : node.domain, // Use first tag or domain as group
+      val: (node.tags && node.tags.length) ? Math.min(5, node.tags.length) : 1, // Node size by tag count
+      // Randomize initial 3D position to help force layout escape a plane
+      x: (Math.random() - 0.5) * 400,
+      y: (Math.random() - 0.5) * 400,
+      z: (Math.random() - 0.5) * 400
     })),
     links: data.links
   };
-  
-  console.log('Processed graph data:', graphData);
+
+  console.log('Processed memory-centric graph data:', graphData);
   console.log(`Nodes: ${graphData.nodes.length}, Links: ${graphData.links.length}`);
 }
 
 // Get node label for tooltips
 function getNodeLabel(node) {
   if (!node) return '';
-  
-  // For tag nodes, show the tag name and number of associated memory nodes
-  return `Tag: ${node.tag}\nAssociated Memories: ${node.memoryNodes ? node.memoryNodes.length : 0}`;
+  // For memory nodes, show content preview and tags
+  const preview = node.content.length > 80 ? node.content.substring(0, 80) + '...' : node.content;
+  return `Memory: ${preview}\nTags: ${node.tags ? node.tags.join(', ') : ''}`;
 }
 
 // Get node color based on tag name and highlight state
@@ -180,42 +189,19 @@ function getNodeColor(node) {
   if (highlightNodes.has(node)) {
     return node === hoverNode ? '#ff5500' : '#ff8800';
   }
-  
-  // Generate a consistent color based on the tag name
-  const tagColors = {
-    'MCP': '#4488ff',
-    'Model_Context_Protocol': '#4488ff',
-    'research_topic': '#44aaff',
-    'technical': '#22ccff',
-    'personal_practice': '#aa44ff',
-    'executive_agency': '#ff44aa',
-    'memory_tool': '#44dd88',
-    'primary_executive': '#dd88ff',
-    'time_perception': '#ff88dd',
-    'AI_limitations': '#88ddff',
-    'memory_systems': '#88ffdd',
-    'persistence': '#ddff88',
-    'consciousness': '#ffdd88',
-    'dimensionality': '#dd88ff'
-  };
-  
-  // Use predefined color if available, otherwise generate one based on the tag name
-  if (tagColors[node.tag]) {
-    return tagColors[node.tag];
+  // Use group (first tag or domain) for color
+  if (node.group) {
+    // Hash group to color
+    let hash = 0;
+    for (let i = 0; i < node.group.length; i++) {
+      hash = node.group.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const r = (hash & 0xFF0000) >> 16;
+    const g = (hash & 0x00FF00) >> 8;
+    const b = hash & 0x0000FF;
+    return `rgb(${(r+128)%256}, ${(g+128)%256}, ${(b+128)%256})`;
   }
-  
-  // Generate a color based on the tag name
-  let hash = 0;
-  for (let i = 0; i < node.tag.length; i++) {
-    hash = node.tag.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  
-  // Convert to RGB
-  const r = (hash & 0xFF0000) >> 16;
-  const g = (hash & 0x00FF00) >> 8;
-  const b = hash & 0x0000FF;
-  
-  return `rgb(${r}, ${g}, ${b})`;
+  return '#cccccc';
 }
 
 // Get link color based on type and highlight state
@@ -245,48 +231,26 @@ function showNodeInfo(node) {
   const nodeId = document.getElementById('node-id');
   const nodeTags = document.getElementById('node-tags');
   const nodeContent = document.getElementById('node-content');
-  
-  // Set node ID (tag name)
-  nodeId.textContent = `Node: ${node.tag}`;
-  
-  // Set related tags (from connected nodes)
+
+  // Set node ID (memory id)
+  nodeId.textContent = `Memory ID: ${node.id}`;
+
+  // Set tags
   nodeTags.innerHTML = '';
-  
-  // Find all connected tags
-  const connectedTags = new Set();
-  graphData.links.forEach(link => {
-    if (link.source.id === node.id) {
-      connectedTags.add(link.target.tag);
-    } else if (link.target.id === node.id) {
-      connectedTags.add(link.source.tag);
-    }
-  });
-  
-  // Add connected tags to the display
-  connectedTags.forEach(tag => {
-    const tagElement = document.createElement('span');
-    tagElement.className = 'tag';
-    tagElement.textContent = tag;
-    nodeTags.appendChild(tagElement);
-  });
-  
-  // Set content - show associated memory nodes
-  if (node.memoryNodes && node.memoryNodes.length > 0) {
-    // Create a summary of the associated memory nodes
-    const contentSummary = node.memoryNodes.map(memNode => {
-      // Get a preview of the content
-      const contentPreview = memNode.content.length > 100 
-        ? memNode.content.substring(0, 100) + '...' 
-        : memNode.content;
-      
-      return `Memory ID: ${memNode.id}\n${contentPreview}\n`;
-    }).join('\n---\n\n');
-    
-    nodeContent.textContent = contentSummary;
+  if (node.tags && node.tags.length > 0) {
+    node.tags.forEach(tag => {
+      const tagElement = document.createElement('span');
+      tagElement.className = 'tag';
+      tagElement.textContent = tag;
+      nodeTags.appendChild(tagElement);
+    });
   } else {
-    nodeContent.textContent = 'No associated memory nodes found.';
+    nodeTags.textContent = 'No tags';
   }
-  
+
+  // Set content
+  nodeContent.textContent = node.content;
+
   // Show the panel
   infoPanel.style.display = 'block';
 }
@@ -317,7 +281,7 @@ function toggleBloomEffect() {
   
   try {
     if (bloomEnabled) {
-      bloomPass.strength = 1.5;
+      bloomPass.strength = 4;
       console.log('Bloom effect enabled');
     } else {
       bloomPass.strength = 0;
