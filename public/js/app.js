@@ -5,10 +5,37 @@ let bloomEnabled = true;
 let highlightNodes = new Set();
 let highlightLinks = new Set();
 let hoverNode = null;
+let selectedNode = null;
+let selectedNodes = []; // Array to store shift-clicked nodes
 let graphData = { nodes: [], links: [] };
+let draggedNode = null; // Track the node being dragged
+let potentialLinkTarget = null; // Track potential link target during drag
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
+  // Add a UI hint for linking
+  const hint = document.createElement('div');
+  hint.id = 'link-hint';
+  hint.style.position = 'fixed';
+  hint.style.bottom = '10px';
+  hint.style.left = '10px';
+  hint.style.background = 'rgba(0,0,0,0.7)';
+  hint.style.color = '#fff';
+  hint.style.padding = '12px 16px';
+  hint.style.borderRadius = '6px';
+  hint.style.zIndex = 1000;
+  hint.style.fontSize = '14px';
+  hint.style.lineHeight = '1.4';
+  hint.style.maxWidth = '400px';
+  hint.innerHTML = `
+    <strong>Memory Graph Interaction:</strong><br>
+    • <span style="color:#00ff00">Shift-click</span> two nodes to create a link between them<br>
+    • <span style="color:#ffff00">Drag</span> a node near another to auto-link them<br>
+    • <span style="color:#3388ff">Click</span> a node to select it and view details<br>
+    • <span style="color:#ff5500">Hover</span> over nodes to see connections
+  `;
+  document.body.appendChild(hint);
+
   initGraph();
   loadData();
   
@@ -27,7 +54,7 @@ function initGraph() {
     .nodeRelSize(12) // Increased node size
     // Make links much more visible
     .linkWidth(link => highlightLinks.has(link) ? 5 : 2.5)
-    .linkDirectionalParticles(link => highlightLinks.has(link) ? 8 : 4)
+    .linkDirectionalParticles(link => Math.round((link.strength || 0.5) * 8))
     .linkDirectionalParticleWidth(4)
     .linkDirectionalParticleSpeed(d => d.strength * 0.01) // Particle speed based on strength
     .linkColor(link => getLinkColor(link))
@@ -40,7 +67,9 @@ function initGraph() {
       if (typeof SpriteText !== 'undefined') {
         const sprite = new SpriteText(link.type);
         sprite.color = 'white'; // Brighter color
-        sprite.textHeight = 2.0; // Larger text
+        sprite.textHeight = 4.0; // Increased text size (was 2.0)
+        sprite.backgroundColor = 'rgba(0,0,0,0.3)'; // Semi-transparent background for better readability
+        sprite.padding = 2; // Add some padding around the text
         return sprite;
       }
       return null;
@@ -92,20 +121,210 @@ function initGraph() {
           }
         });
         
-        // Show info panel
-        showNodeInfo(node);
+        // Show info panel only if no node is currently selected
+        if (!selectedNode) {
+          showNodeInfo(node);
+        }
       } else {
-        // Hide info panel
-        hideNodeInfo();
+        // Hide info panel only if no node is currently selected
+        if (!selectedNode) {
+          hideNodeInfo();
+        }
       }
       
       hoverNode = node || null;
       updateHighlight();
     })
-    .onNodeClick(node => {
-      // Center view on node
-      graph.centerAt(node.x, node.y, node.z, 1000);
-      graph.zoom(1.5, 1000);
+    .onNodeClick((node, event) => {
+      // Check if shift key is pressed for multi-selection
+      if (event.shiftKey) {
+        console.log('Shift-click detected on node:', node.id);
+        
+        // If node is already in selectedNodes, remove it
+        const nodeIndex = selectedNodes.findIndex(n => n.id === node.id);
+        if (nodeIndex !== -1) {
+          selectedNodes.splice(nodeIndex, 1);
+          console.log('Node removed from selection:', node.id);
+        } else {
+          // Add node to selection
+          selectedNodes.push(node);
+          console.log('Node added to selection:', node.id);
+        }
+        
+        // If we have exactly 2 nodes selected, create a link between them
+        if (selectedNodes.length === 2) {
+          const source = selectedNodes[0];
+          const target = selectedNodes[1];
+          console.log('Creating link between nodes:', source.id, 'and', target.id);
+          
+          // Create link via API
+          const linkPayload = {
+            source: source.id,
+            target: target.id,
+            type: 'relates_to',
+            strength: 0.7,
+            domain: source.domain
+          };
+          
+          console.log('[API] Sending POST /api/edges', linkPayload);
+          fetch('/api/edges', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(linkPayload)
+          })
+          .then(res => {
+            console.log('[API] Received response for POST /api/edges', res);
+            return res.json();
+          })
+          .then(result => {
+            console.log('[API] Response JSON for POST /api/edges', result);
+            if (result.success) {
+              // Clear selection and reload data
+              selectedNodes = [];
+              loadData();
+              console.log('Link created successfully, selection cleared');
+            } else {
+              alert('Failed to create link: ' + (result.error || 'Unknown error'));
+            }
+          })
+          .catch(err => {
+            console.error('[API] Error creating link:', err);
+            alert('Error creating link: ' + err);
+          });
+        }
+        
+        // Update highlight to show selected nodes
+        updateHighlight();
+      } else {
+        // Regular click behavior (non-shift)
+        if (selectedNode && node.id === selectedNode.id) {
+          // Deselect if already selected
+          selectedNode = null;
+          hideNodeInfo();
+        } else {
+          selectedNode = node;
+          showNodeInfo(node);
+        }
+        updateHighlight();
+
+        // Center view on node (using lookAt instead of centerAt)
+        try {
+          // Use the camera controls to look at the node
+          // Increased distance for a more zoomed-out view (4x further away)
+          const distance = 160; // Was 40, increased to zoom out
+          const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
+          
+          if (graph.cameraPosition) {
+            graph.cameraPosition(
+              { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, // new position
+              node, // lookAt
+              2000  // transition duration (slightly faster)
+            );
+          } else {
+            console.warn('graph.cameraPosition not available, cannot center view');
+          }
+        } catch (err) {
+          console.error('Error centering view on node:', err);
+        }
+      }
+    })
+    .onNodeDrag((node, translate) => {
+      // Track the node being dragged
+      draggedNode = node;
+      
+      // Check for potential link targets during drag
+      const threshold = 30; // Same threshold as for auto-linking
+      let closestNode = null;
+      let minDist = Infinity;
+      
+      for (const other of graphData.nodes) {
+        if (other.id === node.id) continue;
+        
+        // Check if already linked
+        const alreadyLinked = graphData.links.some(
+          l => {
+            const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+            const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+            return (sourceId === node.id && targetId === other.id) ||
+                   (sourceId === other.id && targetId === node.id);
+          }
+        );
+        
+        if (alreadyLinked) continue;
+        
+        // Euclidean distance
+        const dx = node.x - other.x;
+        const dy = node.y - other.y;
+        const dz = node.z - other.z;
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        
+        if (dist < minDist && dist < threshold) {
+          minDist = dist;
+          closestNode = other;
+        }
+      }
+      
+      // Update potential link target
+      if (potentialLinkTarget !== closestNode) {
+        potentialLinkTarget = closestNode;
+        updateHighlight(); // Update visualization to show potential link
+      }
+    })
+    .onNodeDragEnd(node => {
+      console.log('Node drag ended:', node.id);
+      
+      // Reset drag tracking
+      draggedNode = null;
+      
+      // On drag end, check for nearby nodes to auto-link
+      const threshold = 30; // Distance threshold for auto-linking
+      let closestNode = potentialLinkTarget;
+      
+      if (closestNode) {
+        console.log(`Found closest node within threshold: ${closestNode.id}`);
+        
+        // Create link via API
+        const linkPayload = {
+          source: node.id,
+          target: closestNode.id,
+          type: 'relates_to',
+          strength: 0.7,
+          domain: node.domain || closestNode.domain // Use either domain, preferring the dragged node's
+        };
+        
+        console.log('[API] Sending POST /api/edges', linkPayload);
+        
+        fetch('/api/edges', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(linkPayload)
+        })
+        .then(res => {
+          console.log('[API] Received response for POST /api/edges', res);
+          return res.json();
+        })
+        .then(result => {
+          console.log('[API] Response JSON for POST /api/edges', result);
+          if (result.success) {
+            console.log('Link created successfully, reloading data');
+            loadData();
+            alert(`Linked ${node.id} to ${closestNode.id} (auto-link by proximity)`);
+          } else {
+            console.error('Failed to create link:', result.error || 'Unknown error');
+            alert('Failed to create link: ' + (result.error || 'Unknown error'));
+          }
+        })
+        .catch(err => {
+          console.error('[API] Error creating link:', err);
+          alert('Error creating link: ' + err);
+        });
+      } else {
+        console.log('No nodes found within threshold distance');
+      }
+      
+      // Reset potential link target
+      potentialLinkTarget = null;
+      updateHighlight();
     });
   
   // Add bloom effect
@@ -162,7 +381,7 @@ function processGraphData(data) {
   graphData = {
     nodes: data.nodes.map(node => ({
       ...node,
-      group: node.tags && node.tags.length > 0 ? node.tags[0] : node.domain, // Use first tag or domain as group
+      group: node.domain, // Use domain as group for clustering and coloring
       val: (node.tags && node.tags.length) ? Math.min(5, node.tags.length) : 1, // Node size by tag count
       // Randomize initial 3D position to help force layout escape a plane
       x: (Math.random() - 0.5) * 400,
@@ -186,9 +405,35 @@ function getNodeLabel(node) {
 
 // Get node color based on tag name and highlight state
 function getNodeColor(node) {
+  // Highlight potential link target during drag
+  if (potentialLinkTarget && node.id === potentialLinkTarget.id) {
+    return '#00ffff'; // Cyan for potential link target
+  }
+  
+  // Highlight node being dragged
+  if (draggedNode && node.id === draggedNode.id) {
+    return '#ffff00'; // Yellow for dragged node
+  }
+  
+  // Highlight if selected for shift-click linking
+  if (selectedNodes.some(n => n.id === node.id)) {
+    return '#00ff00'; // Bright green for shift-click selection
+  }
+  
+  // Legacy support for window._linkSelection
+  if (window._linkSelection && window._linkSelection.includes(node)) {
+    return '#00ff00'; // Bright green for selection
+  }
+  
+  // Highlight if selected (persistent)
+  if (selectedNode && node.id === selectedNode.id) {
+    return '#3388ff'; // Blue for selected node
+  }
+  
   if (highlightNodes.has(node)) {
     return node === hoverNode ? '#ff5500' : '#ff8800';
   }
+  
   // Use group (first tag or domain) for color
   if (node.group) {
     // Hash group to color
@@ -248,6 +493,45 @@ function showNodeInfo(node) {
     nodeTags.textContent = 'No tags';
   }
 
+  // Add tag input UI
+  let tagInputDiv = document.getElementById('tag-input-div');
+  if (!tagInputDiv) {
+    tagInputDiv = document.createElement('div');
+    tagInputDiv.id = 'tag-input-div';
+    tagInputDiv.style.marginTop = '10px';
+    nodeTags.parentNode.appendChild(tagInputDiv);
+  }
+  tagInputDiv.innerHTML = `
+    <input id="tag-input" type="text" placeholder="Add tags (comma or space separated)" style="width: 70%; padding: 4px;"/>
+    <button id="add-tag-btn" style="margin-left: 6px;">Add Tag(s)</button>
+    <span id="tag-add-status" style="margin-left: 8px; color: #0f0;"></span>
+  `;
+  document.getElementById('add-tag-btn').onclick = function () {
+    const input = document.getElementById('tag-input').value.trim();
+    if (!input) return;
+    // Split by comma or space, filter out empty
+    const tags = input.split(/[\s,]+/).map(t => t.trim()).filter(Boolean);
+    if (tags.length === 0) return;
+    fetch('/api/tags', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nodeId: node.id, tags })
+    })
+    .then(res => res.json())
+    .then(result => {
+      if (result.success) {
+        document.getElementById('tag-add-status').textContent = 'Tags added!';
+        setTimeout(() => { document.getElementById('tag-add-status').textContent = ''; }, 1200);
+        loadData();
+      } else {
+        document.getElementById('tag-add-status').textContent = 'Failed to add tags';
+      }
+    })
+    .catch(() => {
+      document.getElementById('tag-add-status').textContent = 'Error adding tags';
+    });
+  };
+
   // Set content
   nodeContent.textContent = node.content;
 
@@ -262,12 +546,51 @@ function hideNodeInfo() {
 
 // Update highlighted nodes and links
 function updateHighlight() {
+  // Create a temporary virtual link between dragged node and potential target
+  let virtualLinks = [];
+  if (draggedNode && potentialLinkTarget) {
+    virtualLinks = [{
+      source: draggedNode,
+      target: potentialLinkTarget,
+      type: 'potential_link',
+      color: '#00ffff', // Cyan
+      strength: 0.7
+    }];
+  }
+  
   // Update the graph visualization
   graph
     .nodeColor(graph.nodeColor())
-    .linkWidth(graph.linkWidth())
-    .linkDirectionalParticles(graph.linkDirectionalParticles())
-    .linkColor(graph.linkColor());
+    .linkWidth(link => {
+      if (link.type === 'potential_link') return 4; // Thicker for potential links
+      return highlightLinks.has(link) ? 5 : 2.5;
+    })
+    .linkDirectionalParticles(link => {
+      if (link.type === 'potential_link') return 8; // More particles for potential links
+      return Math.round((link.strength || 0.5) * 8);
+    })
+    .linkColor(link => {
+      if (link.type === 'potential_link') return link.color;
+      return getLinkColor(link);
+    });
+  
+  // Add or remove the virtual link
+  const currentLinks = graph.graphData().links;
+  const virtualLinkExists = currentLinks.some(link => link.type === 'potential_link');
+  
+  if (virtualLinks.length > 0 && !virtualLinkExists) {
+    // Add virtual link
+    graph.graphData({
+      nodes: graph.graphData().nodes,
+      links: [...currentLinks, ...virtualLinks]
+    });
+  } else if (virtualLinks.length === 0 && virtualLinkExists) {
+    // Remove virtual link
+    graph.graphData({
+      nodes: graph.graphData().nodes,
+      links: currentLinks.filter(link => link.type !== 'potential_link')
+    });
+  }
 }
 
 // Toggle bloom effect
@@ -293,4 +616,4 @@ function toggleBloomEffect() {
 }
 
 // Refresh data every 30 seconds
-setInterval(loadData, 30000);
+//setInterval(loadData, 30000);

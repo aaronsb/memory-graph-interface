@@ -61,6 +61,85 @@ app.get('/api/edges', (req, res) => {
   });
 });
 
+// API endpoint to add a new edge (link) between two nodes
+app.use(express.json());
+app.post('/api/edges', (req, res) => {
+  console.log('==== [API] POST /api/edges request received ====');
+  console.log('[API] Request body:', JSON.stringify(req.body, null, 2));
+  
+  const { source, target, type, strength, domain } = req.body;
+  
+  // Validate required fields
+  if (!source || !target || !type || typeof strength !== 'number' || !domain) {
+    console.log('[API] POST /api/edges error: Missing or invalid required fields');
+    console.log('  source:', source);
+    console.log('  target:', target);
+    console.log('  type:', type);
+    console.log('  strength:', strength);
+    console.log('  domain:', domain);
+    return res.status(400).json({ error: 'Missing or invalid required fields' });
+  }
+  
+  // Check if nodes exist
+  const checkNodesQuery = `
+    SELECT id FROM MEMORY_NODES WHERE id IN (?, ?)
+  `;
+  
+  db.all(checkNodesQuery, [source, target], (err, nodes) => {
+    if (err) {
+      console.error('[API] Error checking nodes:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    
+    if (nodes.length < 2) {
+      console.log('[API] Error: One or both nodes do not exist');
+      console.log('  Found nodes:', nodes.map(n => n.id));
+      return res.status(400).json({ error: 'One or both nodes do not exist' });
+    }
+    
+    // Check if edge already exists
+    const checkEdgeQuery = `
+      SELECT id FROM MEMORY_EDGES 
+      WHERE (source = ? AND target = ?) OR (source = ? AND target = ?)
+    `;
+    
+    db.get(checkEdgeQuery, [source, target, target, source], (err, existingEdge) => {
+      if (err) {
+        console.error('[API] Error checking existing edge:', err.message);
+        return res.status(500).json({ error: err.message });
+      }
+      
+      if (existingEdge) {
+        console.log('[API] Edge already exists:', existingEdge.id);
+        return res.status(409).json({ error: 'Edge already exists', id: existingEdge.id });
+      }
+      
+      // Create new edge
+      const id = `${source}-${target}-${type}`;
+      const timestamp = new Date().toISOString();
+      const query = `
+        INSERT INTO MEMORY_EDGES (id, source, target, type, strength, timestamp, domain)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `;
+      
+      console.log('[API] Inserting edge into MEMORY_EDGES:', { id, source, target, type, strength, timestamp, domain });
+      
+      db.run(query, [id, source, target, type, strength, timestamp, domain], function (err) {
+        if (err) {
+          console.error('[API] Error inserting edge:', err.message);
+          return res.status(500).json({ error: err.message });
+        }
+        
+        console.log('[API] Edge inserted successfully:', id);
+        console.log('  Changes:', this.changes);
+        console.log('  Last ID:', this.lastID);
+        
+        res.json({ success: true, id });
+      });
+    });
+  });
+});
+
 // API endpoint to get all tags
 app.get('/api/tags', (req, res) => {
   const query = `
@@ -77,6 +156,27 @@ app.get('/api/tags', (req, res) => {
     }
     
     res.json(tags);
+  });
+});
+
+// API endpoint to add one or more tags to a node
+app.post('/api/tags', (req, res) => {
+  const { nodeId, tags } = req.body;
+  if (!nodeId || !tags || !Array.isArray(tags) || tags.length === 0) {
+    return res.status(400).json({ error: 'Missing nodeId or tags' });
+  }
+  const placeholders = tags.map(() => '(?, ?)').join(', ');
+  const values = [];
+  tags.forEach(tag => {
+    values.push(nodeId, tag);
+  });
+  const query = `INSERT OR IGNORE INTO MEMORY_TAGS (nodeId, tag) VALUES ${placeholders}`;
+  db.run(query, values, function (err) {
+    if (err) {
+      console.error('Error adding tags:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json({ success: true, added: tags.length });
   });
 });
 
