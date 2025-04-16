@@ -237,9 +237,9 @@ function initGraph() {
           .then(result => {
             console.log('[API] Response JSON for POST /api/edges', result);
             if (result.success) {
-              // Clear selection and reload data
+              // Clear selection and reload data with position preservation
               selectedNodes = [];
-              loadData();
+              loadData(true);
               console.log('Link created successfully, selection cleared');
             } else {
               alert('Failed to create link: ' + (result.error || 'Unknown error'));
@@ -311,8 +311,8 @@ function initGraph() {
         .then(result => {
           console.log('[API] Response JSON for DELETE /api/edges', result);
           if (result.success) {
-            // Reload data
-            loadData();
+            // Reload data with position preservation
+            loadData(true);
             console.log('Link deleted successfully');
           } else {
             alert('Failed to delete link: ' + (result.error || 'Unknown error'));
@@ -484,7 +484,7 @@ function initGraph() {
             repulsionReduced = false;
             }, 500); // 500ms delay
             
-            loadData();
+            loadData(true);
             // Removed alert to avoid interrupting the interaction flow
           } else {
             // Restore normal forces immediately if link creation failed
@@ -581,9 +581,27 @@ function initGraph() {
 }
 
 // Load data from the API
-function loadData() {
+function loadData(preservePositions = false) {
   document.getElementById('loading-indicator').style.display = 'block';
   console.log('Fetching graph data...');
+  
+  // Store current node positions if preserving positions
+  const currentPositions = {};
+  if (preservePositions && graphData && graphData.nodes) {
+    graphData.nodes.forEach(node => {
+      if (node.x !== undefined && node.y !== undefined && node.z !== undefined) {
+        currentPositions[node.id] = {
+          x: node.x,
+          y: node.y,
+          z: node.z,
+          vx: node.vx || 0,
+          vy: node.vy || 0,
+          vz: node.vz || 0
+        };
+      }
+    });
+    console.log('Stored positions for', Object.keys(currentPositions).length, 'nodes');
+  }
   
   fetch('/api/graph/memory')
     .then(response => {
@@ -594,11 +612,28 @@ function loadData() {
       console.log('Data received:', data);
       
       // Process the data
-      processGraphData(data);
+      processGraphData(data, currentPositions, preservePositions);
       
-      // Update the graph
+      // Update the graph with a cool-down factor to reduce movement
       console.log('Updating graph with data:', graphData);
-      graph.graphData(graphData);
+      
+      // Apply cool-down factor if preserving positions
+      if (preservePositions) {
+        // Reduce the simulation intensity to minimize node movement
+        graph.d3Force('charge').strength(originalChargeStrength * 0.3); // Reduce charge force
+        
+        // Apply the updated data
+        graph.graphData(graphData);
+        
+        // Gradually restore normal forces after a short delay
+        setTimeout(() => {
+          graph.d3Force('charge').strength(originalChargeStrength);
+          graph.d3ReheatSimulation();
+        }, 1000);
+      } else {
+        // Normal update for initial load
+        graph.graphData(graphData);
+      }
       
       // Hide loading indicator
       document.getElementById('loading-indicator').style.display = 'none';
@@ -610,18 +645,47 @@ function loadData() {
 }
 
 // Process the graph data
-function processGraphData(data) {
+function processGraphData(data, currentPositions = {}, preservePositions = false) {
   // For memory-centric: nodes are memories, links are edges
   graphData = {
-    nodes: data.nodes.map(node => ({
-      ...node,
-      group: node.domain, // Use domain as group for clustering and coloring
-      val: (node.tags && node.tags.length) ? Math.min(5, node.tags.length) : 1, // Node size by tag count
-      // Randomize initial 3D position to help force layout escape a plane
-      x: (Math.random() - 0.5) * 400,
-      y: (Math.random() - 0.5) * 400,
-      z: (Math.random() - 0.5) * 400
-    })),
+    nodes: data.nodes.map(node => {
+      // Start with the basic node data
+      const processedNode = {
+        ...node,
+        group: node.domain, // Use domain as group for clustering and coloring
+        val: (node.tags && node.tags.length) ? Math.min(5, node.tags.length) : 1 // Node size by tag count
+      };
+      
+      // If preserving positions and we have stored position for this node, use it
+      if (preservePositions && currentPositions[node.id]) {
+        const pos = currentPositions[node.id];
+        processedNode.x = pos.x;
+        processedNode.y = pos.y;
+        processedNode.z = pos.z;
+        processedNode.vx = pos.vx * 0.1; // Dampen velocity to reduce movement
+        processedNode.vy = pos.vy * 0.1;
+        processedNode.vz = pos.vz * 0.1;
+        processedNode.fx = pos.x; // Temporarily fix position
+        processedNode.fy = pos.y;
+        processedNode.fz = pos.z;
+        
+        // Schedule releasing the fixed position after a short delay
+        setTimeout(() => {
+          if (processedNode.fx !== undefined) {
+            processedNode.fx = undefined;
+            processedNode.fy = undefined;
+            processedNode.fz = undefined;
+          }
+        }, 1500);
+      } else {
+        // For new nodes or initial load, randomize position
+        processedNode.x = (Math.random() - 0.5) * 400;
+        processedNode.y = (Math.random() - 0.5) * 400;
+        processedNode.z = (Math.random() - 0.5) * 400;
+      }
+      
+      return processedNode;
+    }),
     links: data.links
   };
 
@@ -789,7 +853,7 @@ function showNodeInfo(node) {
       if (result.success) {
         document.getElementById('tag-add-status').textContent = 'Tags added!';
         setTimeout(() => { document.getElementById('tag-add-status').textContent = ''; }, 1200);
-        loadData();
+        loadData(true);
       } else {
         document.getElementById('tag-add-status').textContent = 'Failed to add tags';
       }
