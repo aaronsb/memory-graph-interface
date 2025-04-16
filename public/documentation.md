@@ -204,8 +204,39 @@ The application includes a sophisticated database connection management system:
    - Ensures that all subsequent operations use the updated database state
    - Maintains application stability during external database modifications
 
+## Database Configuration
+
+The application uses an externalized database configuration approach for flexibility and containerization:
+
+1. **Environment Variables**:
+   - `DB_PATH`: Path to the SQLite database file
+   - `PORT`: Server port (defaults to 3000)
+   - These can be set in the environment or in a `.env` file
+
+2. **Docker Support**:
+   - The application can be run in a Docker container
+   - Database file is mounted as a volume for persistence
+   - Configuration is passed through environment variables
+   - Data directory at `/app/data` in the container
+
+3. **Docker Compose**:
+   - Easy deployment with `docker-compose.yml`
+   - Automatically mounts the database directory
+   - Configures networking and restart policies
+   - Creates a dedicated network for the application
+
+4. **Build and Run Scripts**:
+   - `scripts/build-local.sh`: Builds the Docker image
+   - `scripts/run-local.sh`: Runs the container with proper volume mounting
+   - NPM scripts for Docker operations:
+     - `npm run build`: Build the Docker image
+     - `npm run docker:start`: Start with Docker Compose
+     - `npm run docker:stop`: Stop the Docker Compose services
+
 ## Conclusion
 
 This visualization approach creates a rich, multi-dimensional representation of the memory graph data. By incorporating both tags and memories in the visualization and using the actual strength values from the database, we create a natural clustering effect that reveals the underlying structure of the data.
 
 The force-directed layout, combined with visual cues like node size, color, and link appearance, creates an intuitive visualization that allows users to explore and modify complex relationships between memories and their tags. The addition of usability features like copy-to-clipboard, intuitive node linking, and database file watching makes the interface more user-friendly, efficient, and resilient to external changes.
+
+The externalized database configuration and Docker support make the application easy to deploy and maintain in various environments, from local development to production deployments.

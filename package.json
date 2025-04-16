@@ -4,9 +4,13 @@
   "description": "A visualization tool for memory graph database",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "docker build -t memory-graph-interface:latest .",
+    "docker:start": "docker-compose up -d",
+    "docker:stop": "docker-compose down"
   },
   "dependencies": {
+    "dotenv": "^16.5.0",
     "express": "^4.18.2",
     "sqlite3": "^5.1.6"
   }

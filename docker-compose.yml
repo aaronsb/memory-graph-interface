@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  memory-graph-interface:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: memory-graph-interface:latest
+    container_name: memory-graph-interface
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_PATH=/app/data/memory-graph.db
+      - PORT=3000
+    volumes:
+      - /home/aaron/Documents/memory-graph-mcp:/app/data
+    restart: unless-stopped
+
+networks:
+  default:
+    name: memory-graph-network
+    driver: bridge

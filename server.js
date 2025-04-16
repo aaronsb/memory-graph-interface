@@ -2,9 +2,13 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const DB_PATH = process.env.DB_PATH || './memory-graph.db';
+
+console.log(`Using database at: ${DB_PATH}`);
 
 // Track the last modification time of the database file
 let lastDatabaseModTime = null;
@@ -45,7 +49,7 @@ function connectToDatabase(isReconnect = false, callback = null) {
   console.log(`${isReconnect ? 'Re' : ''}connecting to database (attempt ${reconnectAttempts + 1})...`);
   
   // Create a new connection
-  db = new sqlite3.Database('./memory-graph.db', (err) => {
+  db = new sqlite3.Database(DB_PATH, (err) => {
     isConnecting = false;
     
     if (err) {
@@ -651,7 +655,7 @@ app.get('/api/graph/memory', (req, res) => {
 
 // API endpoint to check if the database file has been modified
 app.get('/api/db-status', (req, res) => {
-  fs.stat('./memory-graph.db', (err, stats) => {
+  fs.stat(DB_PATH, (err, stats) => {
     if (err) {
       console.error('Error checking database file:', err.message);
       return res.status(500).json({ error: err.message });
@@ -690,7 +694,7 @@ app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
   
   // Initialize the last modification time when the server starts
-  fs.stat('./memory-graph.db', (err, stats) => {
+  fs.stat(DB_PATH, (err, stats) => {
     if (err) {
       console.error('Error getting initial database file stats:', err.message);
     } else {
