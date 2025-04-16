@@ -180,6 +180,42 @@ app.post('/api/tags', (req, res) => {
   });
 });
 
+// API endpoint to delete an edge between two nodes
+app.delete('/api/edges/:source/:target', (req, res) => {
+  console.log('==== [API] DELETE /api/edges/:source/:target request received ====');
+  const { source, target } = req.params;
+  
+  console.log('[API] Deleting edge between source:', source, 'and target:', target);
+  
+  if (!source || !target) {
+    console.log('[API] DELETE /api/edges error: Missing source or target');
+    return res.status(400).json({ error: 'Missing source or target' });
+  }
+  
+  // Delete the edge in either direction (source->target or target->source)
+  const query = `
+    DELETE FROM MEMORY_EDGES 
+    WHERE (source = ? AND target = ?) OR (source = ? AND target = ?)
+  `;
+  
+  db.run(query, [source, target, target, source], function(err) {
+    if (err) {
+      console.error('[API] Error deleting edge:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    
+    if (this.changes === 0) {
+      console.log('[API] No edge found to delete');
+      return res.status(404).json({ error: 'Edge not found' });
+    }
+    
+    console.log('[API] Edge deleted successfully');
+    console.log('  Changes:', this.changes);
+    
+    res.json({ success: true, deleted: this.changes });
+  });
+});
+
 // API endpoint to get graph data with tags as nodes
 app.get('/api/graph', (req, res) => {
   // ...existing code unchanged...

@@ -134,12 +134,17 @@ Users can interact with the visualization in several ways:
    - When dragging a node, all forces are temporarily disabled for smoother interaction
    - A cyan visual indicator shows when nodes are close enough to form a link
    - Release the mouse button to create the link, or pull away to cancel
-5. **Copy to Clipboard**: Click the clipboard icon in the information panel to copy node details
-6. **Orbit**: Click and drag in empty space to orbit around the visualization
-7. **Zoom**: Use the mouse wheel to zoom in and out
-8. **Info Panel**: View detailed information about selected nodes
-9. **Refresh**: Click the refresh button to update the data
-10. **Toggle Bloom**: Turn the bloom effect on or off
+5. **Control-Click**: Control-click a link to delete it
+   - Hold down the Control key to highlight links when hovering over them
+   - While still holding Control, click on a highlighted link to delete it
+   - No more links are deleted until both the mouse button and Control key are released
+   - This prevents accidental deletion of multiple links
+6. **Copy to Clipboard**: Click the clipboard icon in the information panel to copy node details
+7. **Orbit**: Click and drag in empty space to orbit around the visualization
+8. **Zoom**: Use the mouse wheel to zoom in and out
+9. **Info Panel**: View detailed information about selected nodes
+10. **Refresh**: Click the refresh button to update the data
+11. **Toggle Bloom**: Turn the bloom effect on or off
 
 ## Usability Features
 
@@ -161,6 +166,8 @@ The visualization includes several usability features to enhance the user experi
    - Nodes change color when being dragged (yellow) or when they're a potential link target (cyan)
    - Temporary links show the potential connection before it's confirmed
    - Directional particles flow along links to indicate relationship direction
+   - Links highlight in magenta when Control key is pressed and mouse hovers over them, indicating they can be deleted
+   - Links are immediately removed when Control-clicked, providing clear feedback on deletion
 
 ## Conclusion
 

@@ -5,6 +5,7 @@ let bloomEnabled = true;
 let highlightNodes = new Set();
 let highlightLinks = new Set();
 let hoverNode = null;
+let hoverLink = null; // Track the link being hovered
 let selectedNode = null;
 let selectedNodes = []; // Array to store shift-clicked nodes
 let graphData = { nodes: [], links: [] };
@@ -13,6 +14,8 @@ let potentialLinkTarget = null; // Track potential link target during drag
 let originalChargeStrength = -300; // Store original charge strength
 let temporaryLinkFormed = false; // Track if a temporary link is formed
 let repulsionReduced = false; // Track if repulsion has been reduced during drag
+let controlKeyPressed = false; // Track if Control key is pressed
+let mouseButtonPressed = false; // Track if mouse button is pressed
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
@@ -35,7 +38,8 @@ document.addEventListener('DOMContentLoaded', () => {
     • <span style="color:#00ff00">Shift-click</span> two nodes to create a link between them<br>
     • <span style="color:#ffff00">Drag</span> a node near another to auto-link them<br>
     • <span style="color:#3388ff">Click</span> a node to select it and view details<br>
-    • <span style="color:#ff5500">Hover</span> over nodes to see connections
+    • <span style="color:#ff5500">Hover</span> over nodes to see connections<br>
+    • <span style="color:#ff00ff">Control-click</span> a link to delete it
   `;
   document.body.appendChild(hint);
 
@@ -45,6 +49,37 @@ document.addEventListener('DOMContentLoaded', () => {
   // Event listeners
   document.getElementById('refresh-btn').addEventListener('click', loadData);
   document.getElementById('toggle-bloom').addEventListener('click', toggleBloomEffect);
+  
+  // Add event listeners for Control key
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'Control') {
+      controlKeyPressed = true;
+      updateHighlight();
+    }
+  });
+  
+  window.addEventListener('keyup', (event) => {
+    if (event.key === 'Control') {
+      controlKeyPressed = false;
+      updateHighlight();
+    }
+  });
+  
+  // Track mouse button state
+  window.addEventListener('mousedown', () => {
+    mouseButtonPressed = true;
+  });
+  
+  window.addEventListener('mouseup', () => {
+    mouseButtonPressed = false;
+  });
+  
+  // Clear control key state when window loses focus
+  window.addEventListener('blur', () => {
+    controlKeyPressed = false;
+    mouseButtonPressed = false;
+    updateHighlight();
+  });
 });
 
 // Initialize the 3D force graph
@@ -64,6 +99,7 @@ function initGraph() {
     // Use link strength for link opacity and width
     .linkOpacity(1.0) // Increased opacity
     .linkCurvature(0) // No curvature, straight links
+    .linkLabel(link => `${link.type} (${link.strength.toFixed(2)})`) // Add label for links
     .linkThreeObjectExtend(true)
     .linkThreeObject(link => {
       // Create text sprite for link labels
@@ -110,6 +146,12 @@ function initGraph() {
       // Handle node hover
       if ((!node && !highlightNodes.size) || (node && hoverNode === node)) return;
       
+      // If control key is pressed, we're in link deletion mode, so don't highlight nodes
+      if (controlKeyPressed) {
+        hoverNode = node || null;
+        return;
+      }
+      
       highlightNodes.clear();
       highlightLinks.clear();
       
@@ -137,6 +179,19 @@ function initGraph() {
       
       hoverNode = node || null;
       updateHighlight();
+    })
+    .onLinkHover(link => {
+      // Only highlight links when Control key is pressed
+      if (controlKeyPressed) {
+        highlightLinks.clear();
+        
+        if (link) {
+          highlightLinks.add(link);
+        }
+        
+        hoverLink = link || null;
+        updateHighlight();
+      }
     })
     .onNodeClick((node, event) => {
       // Check if shift key is pressed for multi-selection
@@ -229,6 +284,44 @@ function initGraph() {
         } catch (err) {
           console.error('Error centering view on node:', err);
         }
+      }
+    })
+    .onLinkClick((link, event) => {
+      // Only handle link clicks when Control key is pressed
+      if (controlKeyPressed && hoverLink === link) {
+        console.log('Control-click detected on link:', link);
+        
+        // Delete the link via API
+        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+        
+        console.log(`[API] Deleting link between ${sourceId} and ${targetId}`);
+        
+        // Immediately clear the highlight to provide visual feedback
+        highlightLinks.clear();
+        updateHighlight();
+        
+        fetch(`/api/edges/${sourceId}/${targetId}`, {
+          method: 'DELETE'
+        })
+        .then(res => {
+          console.log('[API] Received response for DELETE /api/edges', res);
+          return res.json();
+        })
+        .then(result => {
+          console.log('[API] Response JSON for DELETE /api/edges', result);
+          if (result.success) {
+            // Reload data
+            loadData();
+            console.log('Link deleted successfully');
+          } else {
+            alert('Failed to delete link: ' + (result.error || 'Unknown error'));
+          }
+        })
+        .catch(err => {
+          console.error('[API] Error deleting link:', err);
+          alert('Error deleting link: ' + err);
+        });
       }
     })
     .onNodeDrag((node, translate) => {
@@ -593,6 +686,10 @@ function getNodeColor(node) {
 // Get link color based on type and highlight state
 function getLinkColor(link) {
   if (highlightLinks.has(link)) {
+    // If control is pressed and this link is highlighted, use a distinct color for deletion
+    if (controlKeyPressed && hoverLink === link) {
+      return '#ff00ff'; // Magenta for deletion
+    }
     return '#ffffff';
   }
   
