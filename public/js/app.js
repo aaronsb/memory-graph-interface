@@ -16,10 +16,12 @@ let temporaryLinkFormed = false; // Track if a temporary link is formed
 let repulsionReduced = false; // Track if repulsion has been reduced during drag
 let controlKeyPressed = false; // Track if Control key is pressed
 let mouseButtonPressed = false; // Track if mouse button is pressed
+let dbWatcherActive = true; // Track if database file watcher is active
+let dbWatcherInterval = null; // Store the interval ID for database checking
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
-  // Add a UI hint for linking
+  // Add a UI hint for linking - positioned to avoid overlap with controls
   const hint = document.createElement('div');
   hint.id = 'link-hint';
   hint.style.position = 'fixed';
@@ -29,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
   hint.style.color = '#fff';
   hint.style.padding = '12px 16px';
   hint.style.borderRadius = '6px';
-  hint.style.zIndex = 1000;
+  hint.style.zIndex = 999; // Lower z-index than controls
   hint.style.fontSize = '14px';
   hint.style.lineHeight = '1.4';
   hint.style.maxWidth = '400px';
@@ -49,6 +51,67 @@ document.addEventListener('DOMContentLoaded', () => {
   // Event listeners
   document.getElementById('refresh-btn').addEventListener('click', loadData);
   document.getElementById('toggle-bloom').addEventListener('click', toggleBloomEffect);
+  
+  // Create a controls container with better layout
+  const controls = document.getElementById('controls');
+  
+  // Create a flex container for the buttons
+  controls.style.display = 'flex';
+  controls.style.flexDirection = 'column';
+  controls.style.gap = '8px';
+  controls.style.zIndex = 1001; // Higher z-index than the hint
+  controls.style.position = 'absolute';
+  controls.style.bottom = '180px'; // Position above the hint
+  controls.style.left = '10px';
+  controls.style.width = '400px'; // Match width with hint
+  
+  // Create a row for the main controls
+  const mainControls = document.createElement('div');
+  mainControls.style.display = 'flex';
+  mainControls.style.gap = '8px';
+  controls.appendChild(mainControls);
+  
+  // Move existing buttons to the main controls row
+  mainControls.appendChild(document.getElementById('refresh-btn'));
+  mainControls.appendChild(document.getElementById('toggle-bloom'));
+  
+  // Add a toggle button for database file watching
+  const watcherToggle = document.createElement('button');
+  watcherToggle.id = 'toggle-watcher';
+  watcherToggle.textContent = 'DB Watcher: ON';
+  watcherToggle.style.backgroundColor = '#2a9852'; // Green background
+  watcherToggle.addEventListener('click', toggleDatabaseWatcher);
+  mainControls.appendChild(watcherToggle);
+  
+  // Add a database update indicator
+  const dbUpdateIndicator = document.createElement('div');
+  dbUpdateIndicator.id = 'db-update-indicator';
+  dbUpdateIndicator.textContent = 'DB Updated';
+  dbUpdateIndicator.style.backgroundColor = 'rgba(40, 167, 69, 0.6)';
+  dbUpdateIndicator.style.color = 'white';
+  dbUpdateIndicator.style.padding = '8px 12px';
+  dbUpdateIndicator.style.borderRadius = '4px';
+  dbUpdateIndicator.style.marginTop = '8px';
+  dbUpdateIndicator.style.textAlign = 'center';
+  dbUpdateIndicator.style.display = 'none'; // Hidden by default
+  controls.appendChild(dbUpdateIndicator);
+  
+  // Add CSS for the blinking effect
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes pulse {
+      0% { background-color: rgba(40, 167, 69, 0.6); }
+      50% { background-color: rgba(40, 167, 69, 1); }
+      100% { background-color: rgba(40, 167, 69, 0.6); }
+    }
+    .pulse-animation {
+      animation: pulse 1s ease-in-out 3;
+    }
+  `;
+  document.head.appendChild(style);
+  
+  // Start the database file watcher
+  startDatabaseWatcher();
   
   // Add event listeners for Control key
   window.addEventListener('keydown', (event) => {
@@ -485,7 +548,6 @@ function initGraph() {
             }, 500); // 500ms delay
             
             loadData(true);
-            // Removed alert to avoid interrupting the interaction flow
           } else {
             // Restore normal forces immediately if link creation failed
             graph.d3Force('charge').strength(originalChargeStrength);
@@ -946,5 +1008,85 @@ function toggleBloomEffect() {
   }
 }
 
-// Refresh data every 30 seconds
-//setInterval(loadData, 30000);
+// Function to check if the database file has been modified
+function checkDatabaseStatus() {
+  fetch('/api/db-status')
+    .then(response => response.json())
+    .then(data => {
+      if (data.changed) {
+        console.log('Database file has been modified, refreshing data...');
+        // Use loadData(true) to preserve node positions
+        loadData(true);
+        
+        // Show the update indicator
+        const indicator = document.getElementById('db-update-indicator');
+        indicator.style.display = 'block';
+        
+        // Add the pulse animation
+        indicator.classList.add('pulse-animation');
+        
+        // Update the timestamp
+        const timestamp = new Date().toLocaleTimeString();
+        indicator.textContent = `DB Updated at ${timestamp}`;
+        
+        // Remove the animation class after it completes
+        setTimeout(() => {
+          indicator.classList.remove('pulse-animation');
+          
+          // Keep the indicator visible
+          indicator.style.display = 'block';
+        }, 3000);
+      }
+    })
+    .catch(error => {
+      console.error('Error checking database status:', error);
+    });
+}
+
+// Start the database file watcher
+function startDatabaseWatcher() {
+  if (dbWatcherInterval) {
+    clearInterval(dbWatcherInterval);
+  }
+  
+  // Check for database changes every 5 seconds
+  dbWatcherInterval = setInterval(checkDatabaseStatus, 5000);
+  dbWatcherActive = true;
+  
+  // Update the toggle button
+  const toggleButton = document.getElementById('toggle-watcher');
+  if (toggleButton) {
+    toggleButton.textContent = 'DB Watcher: ON';
+    toggleButton.style.backgroundColor = '#2a9852'; // Green background
+  }
+  
+  console.log('Database file watcher started');
+}
+
+// Stop the database file watcher
+function stopDatabaseWatcher() {
+  if (dbWatcherInterval) {
+    clearInterval(dbWatcherInterval);
+    dbWatcherInterval = null;
+  }
+  
+  dbWatcherActive = false;
+  
+  // Update the toggle button
+  const toggleButton = document.getElementById('toggle-watcher');
+  if (toggleButton) {
+    toggleButton.textContent = 'DB Watcher: OFF';
+    toggleButton.style.backgroundColor = '#982a2a'; // Red background
+  }
+  
+  console.log('Database file watcher stopped');
+}
+
+// Toggle the database file watcher
+function toggleDatabaseWatcher() {
+  if (dbWatcherActive) {
+    stopDatabaseWatcher();
+  } else {
+    startDatabaseWatcher();
+  }
+}

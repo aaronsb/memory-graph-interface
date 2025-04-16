@@ -169,8 +169,39 @@ The visualization includes several usability features to enhance the user experi
    - Links highlight in magenta when Control key is pressed and mouse hovers over them, indicating they can be deleted
    - Links are immediately removed when Control-clicked, providing clear feedback on deletion
 
+4. **Database File Watching**:
+   - Automatically detects when the database file is modified by external tools
+   - Checks for changes every 5 seconds using file modification timestamps
+   - Reconnects to the database when changes are detected to ensure data consistency
+   - Refreshes the graph visualization while preserving node positions
+   - Displays a notification with timestamp when updates are detected
+   - Includes a toggle button to enable/disable the watcher
+   - Uses exponential backoff for database reconnection to handle temporary file locks
+
+## Robust Database Connection Management
+
+The application includes a sophisticated database connection management system:
+
+1. **Exponential Backoff Reconnection**:
+   - Automatically attempts to reconnect to the database if the connection is lost
+   - Uses exponential backoff to increase the delay between reconnection attempts
+   - Prevents overwhelming the database with rapid reconnection attempts
+   - Configurable maximum number of reconnection attempts
+
+2. **Retry Mechanism for Database Operations**:
+   - Automatically retries database operations that fail due to temporary issues
+   - Handles common SQLite errors like "database is locked" or "SQLITE_BUSY"
+   - Uses exponential backoff for retries to allow locks to clear
+   - Provides detailed logging of retry attempts and outcomes
+
+3. **File Watching Integration**:
+   - Database file watching is integrated with the connection management system
+   - When file changes are detected, the system safely reconnects to the database
+   - Ensures that all subsequent operations use the updated database state
+   - Maintains application stability during external database modifications
+
 ## Conclusion
 
 This visualization approach creates a rich, multi-dimensional representation of the memory graph data. By incorporating both tags and memories in the visualization and using the actual strength values from the database, we create a natural clustering effect that reveals the underlying structure of the data.
 
-The force-directed layout, combined with visual cues like node size, color, and link appearance, creates an intuitive visualization that allows users to explore and modify complex relationships between memories and their tags. The addition of usability features like copy-to-clipboard and intuitive node linking makes the interface more user-friendly and efficient.
+The force-directed layout, combined with visual cues like node size, color, and link appearance, creates an intuitive visualization that allows users to explore and modify complex relationships between memories and their tags. The addition of usability features like copy-to-clipboard, intuitive node linking, and database file watching makes the interface more user-friendly, efficient, and resilient to external changes.

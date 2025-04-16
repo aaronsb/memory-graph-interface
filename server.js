@@ -1,21 +1,144 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Track the last modification time of the database file
+let lastDatabaseModTime = null;
+
 // Serve static files
 app.use(express.static('public'));
 
-// Connect to the SQLite database
-const db = new sqlite3.Database('./memory-graph.db', (err) => {
-  if (err) {
-    console.error('Error connecting to the database:', err.message);
-  } else {
-    console.log('Connected to the memory-graph database');
+// Database connection management
+let db;
+let isConnecting = false;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 10;
+const BASE_RECONNECT_DELAY = 500; // 500ms initial delay
+
+/**
+ * Connect to the database with exponential backoff retry logic
+ * @param {boolean} isReconnect - Whether this is a reconnection attempt
+ * @param {function} callback - Optional callback to execute after connection
+ */
+function connectToDatabase(isReconnect = false, callback = null) {
+  // Prevent multiple simultaneous connection attempts
+  if (isConnecting) {
+    console.log('Connection attempt already in progress, skipping');
+    return;
   }
-});
+  
+  isConnecting = true;
+  
+  // Close existing connection if it exists
+  if (db) {
+    try {
+      db.close();
+    } catch (err) {
+      console.error('Error closing existing database connection:', err.message);
+    }
+  }
+  
+  console.log(`${isReconnect ? 'Re' : ''}connecting to database (attempt ${reconnectAttempts + 1})...`);
+  
+  // Create a new connection
+  db = new sqlite3.Database('./memory-graph.db', (err) => {
+    isConnecting = false;
+    
+    if (err) {
+      console.error('Error connecting to the database:', err.message);
+      
+      // Implement exponential backoff for reconnection
+      if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        reconnectAttempts++;
+        const delay = BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1);
+        console.log(`Will retry connection in ${delay}ms (attempt ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
+        
+        setTimeout(() => {
+          connectToDatabase(true, callback);
+        }, delay);
+      } else {
+        console.error(`Failed to connect after ${MAX_RECONNECT_ATTEMPTS} attempts. Giving up.`);
+        reconnectAttempts = 0; // Reset for future attempts
+      }
+    } else {
+      console.log(`Successfully ${isReconnect ? 're' : ''}connected to the memory-graph database`);
+      reconnectAttempts = 0; // Reset reconnect counter on success
+      
+      // Configure the database connection
+      db.configure('busyTimeout', 5000); // Wait up to 5 seconds when the database is locked
+      
+      // Execute callback if provided
+      if (callback && typeof callback === 'function') {
+        callback();
+      }
+    }
+  });
+}
+
+/**
+ * Execute a database operation with automatic reconnection on failure
+ * @param {function} operation - Function that takes the db object and executes the operation
+ * @param {number} maxRetries - Maximum number of retries
+ * @param {function} callback - Callback to execute after operation completes or fails
+ */
+function executeWithRetry(operation, maxRetries = 3, callback = null) {
+  let retries = 0;
+  
+  function attempt() {
+    if (!db) {
+      console.log('No database connection, connecting first...');
+      connectToDatabase(false, () => attempt());
+      return;
+    }
+    
+    try {
+      operation(db, (err, result) => {
+        if (err && (err.message.includes('SQLITE_BUSY') || 
+                    err.message.includes('SQLITE_LOCKED') || 
+                    err.message.includes('database is locked'))) {
+          
+          if (retries < maxRetries) {
+            retries++;
+            const delay = BASE_RECONNECT_DELAY * Math.pow(2, retries - 1);
+            console.log(`Database busy/locked, retrying in ${delay}ms (attempt ${retries}/${maxRetries})`);
+            
+            setTimeout(attempt, delay);
+          } else {
+            console.error(`Failed operation after ${maxRetries} retries:`, err.message);
+            if (callback) callback(err);
+          }
+        } else if (err) {
+          console.error('Database operation error:', err.message);
+          if (callback) callback(err);
+        } else {
+          if (callback) callback(null, result);
+        }
+      });
+    } catch (err) {
+      console.error('Unexpected error during database operation:', err.message);
+      
+      if (retries < maxRetries) {
+        retries++;
+        const delay = BASE_RECONNECT_DELAY * Math.pow(2, retries - 1);
+        console.log(`Unexpected error, retrying in ${delay}ms (attempt ${retries}/${maxRetries})`);
+        
+        setTimeout(attempt, delay);
+      } else {
+        console.error(`Failed operation after ${maxRetries} retries:`, err.message);
+        if (callback) callback(err);
+      }
+    }
+  }
+  
+  attempt();
+}
+
+// Connect to the SQLite database
+connectToDatabase();
 
 // API endpoint to get all nodes
 app.get('/api/nodes', (req, res) => {
@@ -28,7 +151,9 @@ app.get('/api/nodes', (req, res) => {
     FROM MEMORY_NODES n
   `;
   
-  db.all(query, [], (err, nodes) => {
+  executeWithRetry((db, callback) => {
+    db.all(query, [], callback);
+  }, 3, (err, nodes) => {
     if (err) {
       console.error('Error fetching nodes:', err.message);
       return res.status(500).json({ error: err.message });
@@ -51,7 +176,9 @@ app.get('/api/edges', (req, res) => {
     FROM MEMORY_EDGES e
   `;
   
-  db.all(query, [], (err, edges) => {
+  executeWithRetry((db, callback) => {
+    db.all(query, [], callback);
+  }, 3, (err, edges) => {
     if (err) {
       console.error('Error fetching edges:', err.message);
       return res.status(500).json({ error: err.message });
@@ -80,41 +207,55 @@ app.post('/api/edges', (req, res) => {
     return res.status(400).json({ error: 'Missing or invalid required fields' });
   }
   
-  // Check if nodes exist
-  const checkNodesQuery = `
-    SELECT id FROM MEMORY_NODES WHERE id IN (?, ?)
-  `;
+  // Use Promise-based approach with executeWithRetry for cleaner nested queries
+  const checkNodesExist = () => {
+    return new Promise((resolve, reject) => {
+      const checkNodesQuery = `
+        SELECT id FROM MEMORY_NODES WHERE id IN (?, ?)
+      `;
+      
+      executeWithRetry((db, callback) => {
+        db.all(checkNodesQuery, [source, target], callback);
+      }, 3, (err, nodes) => {
+        if (err) {
+          console.error('[API] Error checking nodes:', err.message);
+          reject(err);
+        } else if (nodes.length < 2) {
+          console.log('[API] Error: One or both nodes do not exist');
+          console.log('  Found nodes:', nodes.map(n => n.id));
+          reject(new Error('One or both nodes do not exist'));
+        } else {
+          resolve();
+        }
+      });
+    });
+  };
   
-  db.all(checkNodesQuery, [source, target], (err, nodes) => {
-    if (err) {
-      console.error('[API] Error checking nodes:', err.message);
-      return res.status(500).json({ error: err.message });
-    }
-    
-    if (nodes.length < 2) {
-      console.log('[API] Error: One or both nodes do not exist');
-      console.log('  Found nodes:', nodes.map(n => n.id));
-      return res.status(400).json({ error: 'One or both nodes do not exist' });
-    }
-    
-    // Check if edge already exists
-    const checkEdgeQuery = `
-      SELECT id FROM MEMORY_EDGES 
-      WHERE (source = ? AND target = ?) OR (source = ? AND target = ?)
-    `;
-    
-    db.get(checkEdgeQuery, [source, target, target, source], (err, existingEdge) => {
-      if (err) {
-        console.error('[API] Error checking existing edge:', err.message);
-        return res.status(500).json({ error: err.message });
-      }
+  const checkEdgeExists = () => {
+    return new Promise((resolve, reject) => {
+      const checkEdgeQuery = `
+        SELECT id FROM MEMORY_EDGES 
+        WHERE (source = ? AND target = ?) OR (source = ? AND target = ?)
+      `;
       
-      if (existingEdge) {
-        console.log('[API] Edge already exists:', existingEdge.id);
-        return res.status(409).json({ error: 'Edge already exists', id: existingEdge.id });
-      }
-      
-      // Create new edge
+      executeWithRetry((db, callback) => {
+        db.get(checkEdgeQuery, [source, target, target, source], callback);
+      }, 3, (err, existingEdge) => {
+        if (err) {
+          console.error('[API] Error checking existing edge:', err.message);
+          reject(err);
+        } else if (existingEdge) {
+          console.log('[API] Edge already exists:', existingEdge.id);
+          reject({ status: 409, message: 'Edge already exists', id: existingEdge.id });
+        } else {
+          resolve();
+        }
+      });
+    });
+  };
+  
+  const createEdge = () => {
+    return new Promise((resolve, reject) => {
       const id = `${source}-${target}-${type}`;
       const timestamp = new Date().toISOString();
       const query = `
@@ -124,20 +265,41 @@ app.post('/api/edges', (req, res) => {
       
       console.log('[API] Inserting edge into MEMORY_EDGES:', { id, source, target, type, strength, timestamp, domain });
       
-      db.run(query, [id, source, target, type, strength, timestamp, domain], function (err) {
+      executeWithRetry((db, callback) => {
+        db.run(query, [id, source, target, type, strength, timestamp, domain], function(err) {
+          if (err) {
+            callback(err);
+          } else {
+            callback(null, { id, changes: this.changes, lastID: this.lastID });
+          }
+        });
+      }, 3, (err, result) => {
         if (err) {
           console.error('[API] Error inserting edge:', err.message);
-          return res.status(500).json({ error: err.message });
+          reject(err);
+        } else {
+          console.log('[API] Edge inserted successfully:', id);
+          console.log('  Changes:', result.changes);
+          console.log('  Last ID:', result.lastID);
+          resolve(result);
         }
-        
-        console.log('[API] Edge inserted successfully:', id);
-        console.log('  Changes:', this.changes);
-        console.log('  Last ID:', this.lastID);
-        
-        res.json({ success: true, id });
       });
     });
-  });
+  };
+  
+  // Execute the operations in sequence
+  checkNodesExist()
+    .then(checkEdgeExists)
+    .then(createEdge)
+    .then(result => {
+      res.json({ success: true, id: result.id });
+    })
+    .catch(err => {
+      if (err.status === 409) {
+        return res.status(409).json({ error: err.message, id: err.id });
+      }
+      return res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+    });
 });
 
 // API endpoint to get all tags
@@ -149,7 +311,9 @@ app.get('/api/tags', (req, res) => {
     FROM MEMORY_TAGS t
   `;
   
-  db.all(query, [], (err, tags) => {
+  executeWithRetry((db, callback) => {
+    db.all(query, [], callback);
+  }, 3, (err, tags) => {
     if (err) {
       console.error('Error fetching tags:', err.message);
       return res.status(500).json({ error: err.message });
@@ -165,13 +329,24 @@ app.post('/api/tags', (req, res) => {
   if (!nodeId || !tags || !Array.isArray(tags) || tags.length === 0) {
     return res.status(400).json({ error: 'Missing nodeId or tags' });
   }
+  
   const placeholders = tags.map(() => '(?, ?)').join(', ');
   const values = [];
   tags.forEach(tag => {
     values.push(nodeId, tag);
   });
+  
   const query = `INSERT OR IGNORE INTO MEMORY_TAGS (nodeId, tag) VALUES ${placeholders}`;
-  db.run(query, values, function (err) {
+  
+  executeWithRetry((db, callback) => {
+    db.run(query, values, function(err) {
+      if (err) {
+        callback(err);
+      } else {
+        callback(null, { changes: this.changes });
+      }
+    });
+  }, 3, (err, result) => {
     if (err) {
       console.error('Error adding tags:', err.message);
       return res.status(500).json({ error: err.message });
@@ -198,21 +373,29 @@ app.delete('/api/edges/:source/:target', (req, res) => {
     WHERE (source = ? AND target = ?) OR (source = ? AND target = ?)
   `;
   
-  db.run(query, [source, target, target, source], function(err) {
+  executeWithRetry((db, callback) => {
+    db.run(query, [source, target, target, source], function(err) {
+      if (err) {
+        callback(err);
+      } else {
+        callback(null, { changes: this.changes });
+      }
+    });
+  }, 3, (err, result) => {
     if (err) {
       console.error('[API] Error deleting edge:', err.message);
       return res.status(500).json({ error: err.message });
     }
     
-    if (this.changes === 0) {
+    if (result.changes === 0) {
       console.log('[API] No edge found to delete');
       return res.status(404).json({ error: 'Edge not found' });
     }
     
     console.log('[API] Edge deleted successfully');
-    console.log('  Changes:', this.changes);
+    console.log('  Changes:', result.changes);
     
-    res.json({ success: true, deleted: this.changes });
+    res.json({ success: true, deleted: result.changes });
   });
 });
 
@@ -265,103 +448,180 @@ app.get('/api/graph/memory', (req, res) => {
     FROM DOMAIN_REFS
   `;
 
-  db.all(nodesQuery, [], (err, memoryNodes) => {
-    if (err) {
-      console.error('Error fetching memory nodes:', err.message);
-      return res.status(500).json({ error: err.message });
-    }
-
-    db.all(tagsQuery, [], (err, tagRecords) => {
-      if (err) {
-        console.error('Error fetching tags:', err.message);
-        return res.status(500).json({ error: err.message });
-      }
-
-      db.all(edgesQuery, [], (err, edgeRecords) => {
-        if (err) {
-          console.error('Error fetching edges:', err.message);
-          return res.status(500).json({ error: err.message });
-        }
-
-        db.all(domainRefsQuery, [], (err, domainRefs) => {
-          if (err) {
-            console.error('Error fetching domain refs:', err.message);
-            return res.status(500).json({ error: err.message });
-          }
-
-          // Attach tags to each memory node
-          const nodeMap = {};
-          memoryNodes.forEach(node => {
-            nodeMap[node.id] = {
-              id: node.id,
-              content: node.content,
-              domain: node.domain,
-              path: node.path,
-              tags: []
-            };
-          });
-          tagRecords.forEach(record => {
-            if (nodeMap[record.nodeId]) {
-              nodeMap[record.nodeId].tags.push(record.tag);
-            }
-          });
-
-          // Prepare nodes and links for the graph
-          const nodes = Object.values(nodeMap);
-          const links = edgeRecords.map(edge => ({
-            id: edge.id,
-            source: edge.source,
-            target: edge.target,
-            type: edge.type,
-            strength: edge.strength,
-            domain: edge.domain
-          }));
-
-          // Add cross-domain refs as links (type: 'cross_domain')
-          domainRefs.forEach(ref => {
-            // Only add if both nodes exist
-            if (nodeMap[ref.nodeId] && nodeMap[ref.targetNodeId]) {
-              links.push({
-                id: `crossdomain-${ref.nodeId}-${ref.targetNodeId}`,
-                source: ref.nodeId,
-                target: ref.targetNodeId,
-                type: 'cross_domain',
-                strength: 0.7,
-                domain: ref.domain,
-                targetDomain: ref.targetDomain,
-                description: ref.description
-              });
-              // If bidirectional, add reverse link
-              if (ref.bidirectional) {
-                links.push({
-                  id: `crossdomain-${ref.targetNodeId}-${ref.nodeId}`,
-                  source: ref.targetNodeId,
-                  target: ref.nodeId,
-                  type: 'cross_domain',
-                  strength: 0.7,
-                  domain: ref.targetDomain,
-                  targetDomain: ref.domain,
-                  description: ref.description
-                });
-              }
-            }
-          });
-
-          console.log(`Processed ${nodes.length} memory nodes and ${links.length} links (including cross-domain)`);
-
-          res.json({
-            nodes,
-            links
-          });
-        });
+  // Use Promise-based approach with our executeWithRetry function for cleaner nested queries
+  const getMemoryNodes = () => {
+    return new Promise((resolve, reject) => {
+      executeWithRetry((db, callback) => {
+        db.all(nodesQuery, [], callback);
+      }, 3, (err, nodes) => {
+        if (err) reject(err);
+        else resolve(nodes);
       });
     });
+  };
+
+  const getTagRecords = () => {
+    return new Promise((resolve, reject) => {
+      executeWithRetry((db, callback) => {
+        db.all(tagsQuery, [], callback);
+      }, 3, (err, tags) => {
+        if (err) reject(err);
+        else resolve(tags);
+      });
+    });
+  };
+
+  const getEdgeRecords = () => {
+    return new Promise((resolve, reject) => {
+      executeWithRetry((db, callback) => {
+        db.all(edgesQuery, [], callback);
+      }, 3, (err, edges) => {
+        if (err) reject(err);
+        else resolve(edges);
+      });
+    });
+  };
+
+  const getDomainRefs = () => {
+    return new Promise((resolve, reject) => {
+      executeWithRetry((db, callback) => {
+        db.all(domainRefsQuery, [], callback);
+      }, 3, (err, refs) => {
+        if (err) reject(err);
+        else resolve(refs);
+      });
+    });
+  };
+
+  // Execute all queries in parallel and process results
+  Promise.all([
+    getMemoryNodes(),
+    getTagRecords(),
+    getEdgeRecords(),
+    getDomainRefs()
+  ])
+  .then(([memoryNodes, tagRecords, edgeRecords, domainRefs]) => {
+    // Attach tags to each memory node
+    const nodeMap = {};
+    memoryNodes.forEach(node => {
+      nodeMap[node.id] = {
+        id: node.id,
+        content: node.content,
+        domain: node.domain,
+        path: node.path,
+        tags: []
+      };
+    });
+    
+    tagRecords.forEach(record => {
+      if (nodeMap[record.nodeId]) {
+        nodeMap[record.nodeId].tags.push(record.tag);
+      }
+    });
+
+    // Prepare nodes and links for the graph
+    const nodes = Object.values(nodeMap);
+    const links = edgeRecords.map(edge => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      type: edge.type,
+      strength: edge.strength,
+      domain: edge.domain
+    }));
+
+    // Add cross-domain refs as links (type: 'cross_domain')
+    domainRefs.forEach(ref => {
+      // Only add if both nodes exist
+      if (nodeMap[ref.nodeId] && nodeMap[ref.targetNodeId]) {
+        links.push({
+          id: `crossdomain-${ref.nodeId}-${ref.targetNodeId}`,
+          source: ref.nodeId,
+          target: ref.targetNodeId,
+          type: 'cross_domain',
+          strength: 0.7,
+          domain: ref.domain,
+          targetDomain: ref.targetDomain,
+          description: ref.description
+        });
+        // If bidirectional, add reverse link
+        if (ref.bidirectional) {
+          links.push({
+            id: `crossdomain-${ref.targetNodeId}-${ref.nodeId}`,
+            source: ref.targetNodeId,
+            target: ref.nodeId,
+            type: 'cross_domain',
+            strength: 0.7,
+            domain: ref.targetDomain,
+            targetDomain: ref.domain,
+            description: ref.description
+          });
+        }
+      }
+    });
+
+    console.log(`Processed ${nodes.length} memory nodes and ${links.length} links (including cross-domain)`);
+
+    res.json({
+      nodes,
+      links
+    });
+  })
+  .catch(err => {
+    console.error('Error fetching graph data:', err.message);
+    res.status(500).json({ error: err.message });
+  });
+});
+
+// API endpoint to check if the database file has been modified
+app.get('/api/db-status', (req, res) => {
+  fs.stat('./memory-graph.db', (err, stats) => {
+    if (err) {
+      console.error('Error checking database file:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    
+    const currentModTime = stats.mtime.getTime();
+    
+    // Initialize lastDatabaseModTime if it's null
+    if (lastDatabaseModTime === null) {
+      lastDatabaseModTime = currentModTime;
+      return res.json({ changed: false });
+    }
+    
+    // Check if the file has been modified
+    const hasChanged = currentModTime > lastDatabaseModTime;
+    
+    // If the file has changed, update the last modification time and reconnect to the database
+    if (hasChanged) {
+      console.log('Database file has been modified. Last mod time:', new Date(lastDatabaseModTime).toISOString());
+      console.log('Current mod time:', new Date(currentModTime).toISOString());
+      
+      lastDatabaseModTime = currentModTime;
+      
+      // Reconnect to the database to ensure we have the latest data
+      connectToDatabase(true, () => {
+        console.log('Reconnected to the memory-graph database after external modification');
+      });
+    }
+    
+    res.json({ changed: hasChanged });
   });
 });
 
 // Start the server
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
+  
+  // Initialize the last modification time when the server starts
+  fs.stat('./memory-graph.db', (err, stats) => {
+    if (err) {
+      console.error('Error getting initial database file stats:', err.message);
+    } else {
+      lastDatabaseModTime = stats.mtime.getTime();
+      console.log('Initial database modification time:', new Date(lastDatabaseModTime).toISOString());
+    }
+  });
 });
 
 // Close the database connection when the process is terminated
