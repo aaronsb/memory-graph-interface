@@ -41,7 +41,8 @@ document.addEventListener('DOMContentLoaded', () => {
     • <span style="color:#ffff00">Drag</span> a node near another to auto-link them<br>
     • <span style="color:#3388ff">Click</span> a node to select it and view details<br>
     • <span style="color:#ff5500">Hover</span> over nodes to see connections<br>
-    • <span style="color:#ff00ff">Control-click</span> a link to delete it
+    • <span style="color:#ff00ff">Control-click</span> a link to delete it<br>
+    • <span style="color:#ff00ff">Control-click</span> a node to delete it and its connections
   `;
   document.body.appendChild(hint);
 
@@ -257,6 +258,56 @@ function initGraph() {
       }
     })
     .onNodeClick((node, event) => {
+      // Check if control key is pressed for node deletion
+      if (controlKeyPressed) {
+        console.log('Control-click detected on node:', node.id);
+        
+        // Show custom confirmation dialog
+        showCustomConfirmDialog(
+          `Are you sure you want to delete this memory node and all its connections?\n\nMemory ID: ${node.id}`,
+          () => {
+            // Yes callback
+            console.log(`[API] Deleting node with ID: ${node.id}`);
+            
+            // Delete the node via API
+            fetch(`/api/nodes/${node.id}`, {
+              method: 'DELETE'
+            })
+            .then(res => {
+              console.log('[API] Received response for DELETE /api/nodes', res);
+              return res.json();
+            })
+            .then(result => {
+              console.log('[API] Response JSON for DELETE /api/nodes', result);
+              if (result.success) {
+                // If the deleted node was selected, clear the selection
+                if (selectedNode && selectedNode.id === node.id) {
+                  selectedNode = null;
+                  hideNodeInfo();
+                }
+                
+                // Remove the node from selectedNodes if it's there
+                const nodeIndex = selectedNodes.findIndex(n => n.id === node.id);
+                if (nodeIndex !== -1) {
+                  selectedNodes.splice(nodeIndex, 1);
+                }
+                
+                // Reload data with position preservation
+                loadData(true);
+                console.log('Node deleted successfully');
+              } else {
+                alert('Failed to delete node: ' + (result.error || 'Unknown error'));
+              }
+            })
+            .catch(err => {
+              console.error('[API] Error deleting node:', err);
+              alert('Error deleting node: ' + err);
+            });
+          }
+        );
+        return; // Exit early to prevent other click behaviors
+      }
+      
       // Check if shift key is pressed for multi-selection
       if (event.shiftKey) {
         console.log('Shift-click detected on node:', node.id);
@@ -354,37 +405,44 @@ function initGraph() {
       if (controlKeyPressed && hoverLink === link) {
         console.log('Control-click detected on link:', link);
         
-        // Delete the link via API
+        // Get source and target IDs
         const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
         const targetId = typeof link.target === 'object' ? link.target.id : link.target;
         
-        console.log(`[API] Deleting link between ${sourceId} and ${targetId}`);
-        
-        // Immediately clear the highlight to provide visual feedback
-        highlightLinks.clear();
-        updateHighlight();
-        
-        fetch(`/api/edges/${sourceId}/${targetId}`, {
-          method: 'DELETE'
-        })
-        .then(res => {
-          console.log('[API] Received response for DELETE /api/edges', res);
-          return res.json();
-        })
-        .then(result => {
-          console.log('[API] Response JSON for DELETE /api/edges', result);
-          if (result.success) {
-            // Reload data with position preservation
-            loadData(true);
-            console.log('Link deleted successfully');
-          } else {
-            alert('Failed to delete link: ' + (result.error || 'Unknown error'));
+        // Show custom confirmation dialog
+        showCustomConfirmDialog(
+          `Are you sure you want to delete this link?\n\nFrom: ${sourceId}\nTo: ${targetId}`,
+          () => {
+            // Yes callback
+            console.log(`[API] Deleting link between ${sourceId} and ${targetId}`);
+            
+            // Immediately clear the highlight to provide visual feedback
+            highlightLinks.clear();
+            updateHighlight();
+            
+            fetch(`/api/edges/${sourceId}/${targetId}`, {
+              method: 'DELETE'
+            })
+            .then(res => {
+              console.log('[API] Received response for DELETE /api/edges', res);
+              return res.json();
+            })
+            .then(result => {
+              console.log('[API] Response JSON for DELETE /api/edges', result);
+              if (result.success) {
+                // Reload data with position preservation
+                loadData(true);
+                console.log('Link deleted successfully');
+              } else {
+                alert('Failed to delete link: ' + (result.error || 'Unknown error'));
+              }
+            })
+            .catch(err => {
+              console.error('[API] Error deleting link:', err);
+              alert('Error deleting link: ' + err);
+            });
           }
-        })
-        .catch(err => {
-          console.error('[API] Error deleting link:', err);
-          alert('Error deleting link: ' + err);
-        });
+        );
       }
     })
     .onNodeDrag((node, translate) => {
@@ -1089,4 +1147,39 @@ function toggleDatabaseWatcher() {
   } else {
     startDatabaseWatcher();
   }
+}
+
+// Show custom confirmation dialog with Yes/No buttons
+function showCustomConfirmDialog(message, yesCallback) {
+  const dialog = document.getElementById('custom-confirm-dialog');
+  const messageEl = document.getElementById('confirm-message');
+  const yesBtn = document.getElementById('confirm-yes-btn');
+  const noBtn = document.getElementById('confirm-no-btn');
+  
+  // Set the message
+  messageEl.textContent = message;
+  
+  // Set up event handlers
+  const closeDialog = () => {
+    dialog.style.display = 'none';
+    yesBtn.removeEventListener('click', handleYes);
+    noBtn.removeEventListener('click', handleNo);
+  };
+  
+  const handleYes = () => {
+    closeDialog();
+    if (yesCallback && typeof yesCallback === 'function') {
+      yesCallback();
+    }
+  };
+  
+  const handleNo = () => {
+    closeDialog();
+  };
+  
+  yesBtn.addEventListener('click', handleYes);
+  noBtn.addEventListener('click', handleNo);
+  
+  // Show the dialog
+  dialog.style.display = 'block';
 }

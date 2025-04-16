@@ -134,11 +134,15 @@ Users can interact with the visualization in several ways:
    - When dragging a node, all forces are temporarily disabled for smoother interaction
    - A cyan visual indicator shows when nodes are close enough to form a link
    - Release the mouse button to create the link, or pull away to cancel
-5. **Control-Click**: Control-click a link to delete it
+5. **Control-Click**: Control-click a link or node to delete it
    - Hold down the Control key to highlight links when hovering over them
    - While still holding Control, click on a highlighted link to delete it
-   - No more links are deleted until both the mouse button and Control key are released
-   - This prevents accidental deletion of multiple links
+   - While holding Control, click on a node to delete it and all its connections
+   - A confirmation dialog with Yes/No buttons will appear before deleting a node
+   - Node deletion safely removes only the selected node, its connected edges, and associated tags
+   - The deletion process uses a database transaction to ensure data integrity
+   - No more items are deleted until both the mouse button and Control key are released
+   - This prevents accidental deletion of multiple items
 6. **Copy to Clipboard**: Click the clipboard icon in the information panel to copy node details
 7. **Orbit**: Click and drag in empty space to orbit around the visualization
 8. **Zoom**: Use the mouse wheel to zoom in and out

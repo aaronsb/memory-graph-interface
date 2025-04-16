@@ -399,6 +399,82 @@ app.delete('/api/edges/:source/:target', (req, res) => {
   });
 });
 
+// API endpoint to delete a node and its associated edges and tags
+app.delete('/api/nodes/:id', (req, res) => {
+  console.log('==== [API] DELETE /api/nodes/:id request received ====');
+  const { id } = req.params;
+  
+  console.log('[API] Deleting node with ID:', id);
+  
+  if (!id) {
+    console.log('[API] DELETE /api/nodes error: Missing node ID');
+    return res.status(400).json({ error: 'Missing node ID' });
+  }
+  
+  // Use a transaction to ensure data integrity
+  executeWithRetry((db, callback) => {
+    db.serialize(() => {
+      db.run('BEGIN TRANSACTION');
+      
+      // First, delete the edges connected to this node
+      db.run('DELETE FROM MEMORY_EDGES WHERE source = ? OR target = ?', [id, id], function(err) {
+        if (err) {
+          db.run('ROLLBACK');
+          return callback(err);
+        }
+        
+        console.log(`[API] Deleted ${this.changes} edges connected to node ${id}`);
+        
+        // Next, delete the tags associated with this node
+        db.run('DELETE FROM MEMORY_TAGS WHERE nodeId = ?', [id], function(err) {
+          if (err) {
+            db.run('ROLLBACK');
+            return callback(err);
+          }
+          
+          console.log(`[API] Deleted ${this.changes} tags associated with node ${id}`);
+          
+          // Finally, delete the node itself
+          db.run('DELETE FROM MEMORY_NODES WHERE id = ?', [id], function(err) {
+            if (err) {
+              db.run('ROLLBACK');
+              return callback(err);
+            }
+            
+            const nodeChanges = this.changes;
+            console.log(`[API] Deleted node ${id}, changes: ${nodeChanges}`);
+            
+            // Commit the transaction
+            db.run('COMMIT', function(err) {
+              if (err) {
+                db.run('ROLLBACK');
+                return callback(err);
+              }
+              
+              callback(null, { changes: nodeChanges });
+            });
+          });
+        });
+      });
+    });
+  }, 3, (err, result) => {
+    if (err) {
+      console.error('[API] Error deleting node:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    
+    if (result.changes === 0) {
+      console.log('[API] No node found to delete');
+      return res.status(404).json({ error: 'Node not found' });
+    }
+    
+    console.log('[API] Node deleted successfully');
+    console.log('  Changes:', result.changes);
+    
+    res.json({ success: true, deleted: result.changes });
+  });
+});
+
 // API endpoint to get graph data with tags as nodes
 app.get('/api/graph', (req, res) => {
   // ...existing code unchanged...

@@ -161,6 +161,15 @@
   
   <div class="loading" id="loading-indicator">Loading memory graph data...</div>
   
+  <!-- Custom confirmation dialog -->
+  <div id="custom-confirm-dialog" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(30, 30, 40, 0.95); padding: 20px; border-radius: 8px; box-shadow: 0 0 20px rgba(0, 0, 0, 0.7); z-index: 1000; min-width: 300px; text-align: center; border: 1px solid rgba(100, 100, 255, 0.3);">
+    <div id="confirm-message" style="margin-bottom: 20px; font-size: 16px;"></div>
+    <div style="display: flex; justify-content: center; gap: 10px;">
+      <button id="confirm-yes-btn" style="background-color: #d9534f; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; color: white;">Yes</button>
+      <button id="confirm-no-btn" style="background-color: #5bc0de; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; color: white;">No</button>
+    </div>
+  </div>
+  
   <script src="js/app.js"></script>
 </body>
 </html>
