@@ -128,15 +128,42 @@ The implementation uses several key technologies:
 Users can interact with the visualization in several ways:
 
 1. **Hover**: Hover over a node to see its details and highlight its connections
-2. **Click**: Click on a node to center the view on it
-3. **Orbit**: Click and drag to orbit around the visualization
-4. **Zoom**: Use the mouse wheel to zoom in and out
-5. **Info Panel**: View detailed information about selected nodes
-6. **Refresh**: Click the refresh button to update the data
-7. **Toggle Bloom**: Turn the bloom effect on or off
+2. **Click**: Click on a node to select it, view its details, and center the view on it
+3. **Shift-Click**: Shift-click two nodes to create a link between them
+4. **Drag to Link**: Drag a node close to another node to create a link between them
+   - When dragging a node, all forces are temporarily disabled for smoother interaction
+   - A cyan visual indicator shows when nodes are close enough to form a link
+   - Release the mouse button to create the link, or pull away to cancel
+5. **Copy to Clipboard**: Click the clipboard icon in the information panel to copy node details
+6. **Orbit**: Click and drag in empty space to orbit around the visualization
+7. **Zoom**: Use the mouse wheel to zoom in and out
+8. **Info Panel**: View detailed information about selected nodes
+9. **Refresh**: Click the refresh button to update the data
+10. **Toggle Bloom**: Turn the bloom effect on or off
+
+## Usability Features
+
+The visualization includes several usability features to enhance the user experience:
+
+1. **Copy to Clipboard**: 
+   - A clipboard icon in the information panel allows users to copy node details
+   - Provides visual feedback when content is copied
+   - Copies the node ID, tags, and content in a formatted text
+
+2. **Intuitive Node Linking**:
+   - Nodes can be linked by either shift-clicking two nodes or by dragging one node to another
+   - When dragging a node, all forces are temporarily disabled for precise control
+   - A visual indicator (cyan link) shows when nodes are close enough to form a link
+   - Different thresholds for forming vs. breaking links (hysteresis) prevent accidental link cancellation
+   - Forces are gradually restored after link creation to prevent sudden node movement
+
+3. **Visual Feedback**:
+   - Nodes change color when being dragged (yellow) or when they're a potential link target (cyan)
+   - Temporary links show the potential connection before it's confirmed
+   - Directional particles flow along links to indicate relationship direction
 
 ## Conclusion
 
 This visualization approach creates a rich, multi-dimensional representation of the memory graph data. By incorporating both tags and memories in the visualization and using the actual strength values from the database, we create a natural clustering effect that reveals the underlying structure of the data.
 
-The force-directed layout, combined with visual cues like node size, color, and link appearance, creates an intuitive visualization that allows users to explore complex relationships between memories and their tags.
+The force-directed layout, combined with visual cues like node size, color, and link appearance, creates an intuitive visualization that allows users to explore and modify complex relationships between memories and their tags. The addition of usability features like copy-to-clipboard and intuitive node linking makes the interface more user-friendly and efficient.

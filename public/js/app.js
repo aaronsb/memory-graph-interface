@@ -10,6 +10,9 @@ let selectedNodes = []; // Array to store shift-clicked nodes
 let graphData = { nodes: [], links: [] };
 let draggedNode = null; // Track the node being dragged
 let potentialLinkTarget = null; // Track potential link target during drag
+let originalChargeStrength = -300; // Store original charge strength
+let temporaryLinkFormed = false; // Track if a temporary link is formed
+let repulsionReduced = false; // Track if repulsion has been reduced during drag
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
@@ -86,7 +89,7 @@ function initGraph() {
       .strength(link => link.strength * 2) // Multiply strength for more effect
     )
     .d3Force('charge', d3.forceManyBody()
-      .strength(-300) // Stronger repulsion for better spacing
+      .strength(originalChargeStrength) // Stronger repulsion for better spacing
       .distanceMax(300) // Limit the distance of effect
     )
     .d3Force('center', d3.forceCenter())
@@ -232,10 +235,43 @@ function initGraph() {
       // Track the node being dragged
       draggedNode = node;
       
-      // Check for potential link targets during drag
-      const threshold = 30; // Same threshold as for auto-linking
+      // Completely disable all forces when dragging starts (first time only)
+      if (!repulsionReduced) {
+        console.log('Drag started, disabling all forces');
+        
+        // Disable charge (repulsion) force
+        graph.d3Force('charge').strength(0);
+        
+        // Disable link force
+        const linkForce = graph.d3Force('link');
+        if (linkForce) {
+          linkForce.strength(0);
+        }
+        
+        // Disable center force
+        graph.d3Force('center').strength(0);
+        
+        // Disable collision force
+        graph.d3Force('collide').radius(0);
+        
+        // Pause the simulation to prevent any movement
+        graph.d3ReheatSimulation();
+        
+        repulsionReduced = true;
+      }
+      
+      // Calculate threshold based on node radius
+      // Base node size is 12 (nodeRelSize), and node.val affects size
+      const nodeRadius = 12 * (node.val || 1);
+      
       let closestNode = null;
       let minDist = Infinity;
+      let withinThreshold = false;
+      
+      // Use different thresholds for forming and breaking links (hysteresis)
+      // If we already have a potential link target, use a larger threshold to maintain it
+      const linkFormThresholdFactor = 2.0; // More generous threshold for forming links
+      const linkBreakThresholdFactor = 2.5; // Even larger threshold for breaking links
       
       for (const other of graphData.nodes) {
         if (other.id === node.id) continue;
@@ -258,15 +294,38 @@ function initGraph() {
         const dz = node.z - other.z;
         const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
         
-        if (dist < minDist && dist < threshold) {
+        // Calculate other node's radius
+        const otherRadius = 12 * (other.val || 1);
+        
+        // Determine which threshold to use based on whether this node is already the potential target
+        const thresholdFactor = (potentialLinkTarget === other) ? 
+          linkBreakThresholdFactor : linkFormThresholdFactor;
+        
+        // Adjust threshold to be the sum of both node radii times the appropriate factor
+        const adjustedThreshold = (nodeRadius + otherRadius) * thresholdFactor;
+        
+        if (dist < minDist && dist < adjustedThreshold) {
           minDist = dist;
           closestNode = other;
+          withinThreshold = true;
         }
       }
       
       // Update potential link target
       if (potentialLinkTarget !== closestNode) {
         potentialLinkTarget = closestNode;
+        
+        // If we have a new potential target, mark it for visualization only
+        if (closestNode && !temporaryLinkFormed) {
+          console.log('Potential link formed');
+          temporaryLinkFormed = true;
+        } 
+        // If no potential target but we had one before
+        else if (!closestNode && temporaryLinkFormed) {
+          console.log('Potential link lost');
+          temporaryLinkFormed = false;
+        }
+        
         updateHighlight(); // Update visualization to show potential link
       }
     })
@@ -276,12 +335,13 @@ function initGraph() {
       // Reset drag tracking
       draggedNode = null;
       
-      // On drag end, check for nearby nodes to auto-link
-      const threshold = 30; // Distance threshold for auto-linking
+      // Use the potential link target that was identified during drag
       let closestNode = potentialLinkTarget;
       
       if (closestNode) {
         console.log(`Found closest node within threshold: ${closestNode.id}`);
+        
+        // Keep the reduced repulsion until after the link is created
         
         // Create link via API
         const linkPayload = {
@@ -307,19 +367,100 @@ function initGraph() {
           console.log('[API] Response JSON for POST /api/edges', result);
           if (result.success) {
             console.log('Link created successfully, reloading data');
+            
+            // Delay restoring normal forces until after the link is created and data is reloaded
+            // This gives the user time to see the link before the nodes move away
+            setTimeout(() => {
+            // Restore normal forces
+            graph.d3Force('charge').strength(originalChargeStrength);
+            graph.d3Force('collide').radius(node => 15 + (node.val || 1) * 5);
+            
+            // Restore link force
+            const linkForce = graph.d3Force('link');
+            if (linkForce) {
+              linkForce.strength(link => link.strength * 2 || 1);
+            }
+            
+            // Restore center force
+            graph.d3Force('center').strength(1);
+            
+            // Reheat the simulation
+            graph.d3ReheatSimulation();
+            
+            temporaryLinkFormed = false;
+            repulsionReduced = false;
+            }, 500); // 500ms delay
+            
             loadData();
-            alert(`Linked ${node.id} to ${closestNode.id} (auto-link by proximity)`);
+            // Removed alert to avoid interrupting the interaction flow
           } else {
+            // Restore normal forces immediately if link creation failed
+            graph.d3Force('charge').strength(originalChargeStrength);
+            graph.d3Force('collide').radius(node => 15 + (node.val || 1) * 5);
+            
+            // Restore link force
+            const linkForce = graph.d3Force('link');
+            if (linkForce) {
+              linkForce.strength(link => link.strength * 2 || 1);
+            }
+            
+            // Restore center force
+            graph.d3Force('center').strength(1);
+            
+            // Reheat the simulation
+            graph.d3ReheatSimulation();
+            
+            temporaryLinkFormed = false;
+            repulsionReduced = false;
+            
             console.error('Failed to create link:', result.error || 'Unknown error');
             alert('Failed to create link: ' + (result.error || 'Unknown error'));
           }
         })
         .catch(err => {
+          // Restore normal forces immediately if there was an error
+          graph.d3Force('charge').strength(originalChargeStrength);
+          graph.d3Force('collide').radius(node => 15 + (node.val || 1) * 5);
+          
+          // Restore link force
+          const linkForce = graph.d3Force('link');
+          if (linkForce) {
+            linkForce.strength(link => link.strength * 2 || 1);
+          }
+          
+          // Restore center force
+          graph.d3Force('center').strength(1);
+          
+          // Reheat the simulation
+          graph.d3ReheatSimulation();
+          
+          temporaryLinkFormed = false;
+          repulsionReduced = false;
+          
           console.error('[API] Error creating link:', err);
           alert('Error creating link: ' + err);
         });
       } else {
         console.log('No nodes found within threshold distance');
+        
+        // Restore normal forces immediately if no link is being created
+        graph.d3Force('charge').strength(originalChargeStrength);
+        graph.d3Force('collide').radius(node => 15 + (node.val || 1) * 5);
+        
+        // Restore link force
+        const linkForce = graph.d3Force('link');
+        if (linkForce) {
+          linkForce.strength(link => link.strength * 2 || 1);
+        }
+        
+        // Restore center force
+        graph.d3Force('center').strength(1);
+        
+        // Reheat the simulation
+        graph.d3ReheatSimulation();
+        
+        temporaryLinkFormed = false;
+        repulsionReduced = false;
       }
       
       // Reset potential link target
@@ -476,9 +617,38 @@ function showNodeInfo(node) {
   const nodeId = document.getElementById('node-id');
   const nodeTags = document.getElementById('node-tags');
   const nodeContent = document.getElementById('node-content');
+  const copyButton = document.getElementById('copy-to-clipboard');
 
   // Set node ID (memory id)
   nodeId.textContent = `Memory ID: ${node.id}`;
+  
+  // Set up copy to clipboard functionality
+  copyButton.onclick = function() {
+    // Prepare content to copy (combine ID, tags, and content)
+    const tagsText = node.tags && node.tags.length > 0 ? 
+      `Tags: ${node.tags.join(', ')}` : 'Tags: None';
+    
+    const textToCopy = `${nodeId.textContent}\n${tagsText}\n\n${node.content}`;
+    
+    // Copy to clipboard
+    navigator.clipboard.writeText(textToCopy)
+      .then(() => {
+        // Visual feedback that copy was successful
+        const originalText = copyButton.textContent;
+        copyButton.textContent = '✓';
+        copyButton.style.color = '#00ff00';
+        
+        // Reset after a short delay
+        setTimeout(() => {
+          copyButton.textContent = originalText;
+          copyButton.style.color = '';
+        }, 1500);
+      })
+      .catch(err => {
+        console.error('Failed to copy text: ', err);
+        alert('Failed to copy to clipboard');
+      });
+  };
 
   // Set tags
   nodeTags.innerHTML = '';

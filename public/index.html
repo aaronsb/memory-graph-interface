@@ -45,6 +45,23 @@
       padding-bottom: 12px;
       color: #aaccff; /* Light blue heading */
       font-size: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .copy-icon {
+      cursor: pointer;
+      color: #aaccff;
+      font-size: 16px;
+      padding: 5px;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+    
+    .copy-icon:hover {
+      background-color: rgba(100, 100, 255, 0.2);
+      transform: scale(1.1);
     }
     
     #info-panel .tag {
@@ -129,7 +146,10 @@
   <div id="graph-container"></div>
   
   <div id="info-panel">
-    <h3 id="node-id">Node Details</h3>
+    <h3>
+      <span id="node-id">Node Details</span>
+      <span class="copy-icon" id="copy-to-clipboard" title="Copy to clipboard">📋</span>
+    </h3>
     <div id="node-tags"></div>
     <div id="node-content" class="content"></div>
   </div>
