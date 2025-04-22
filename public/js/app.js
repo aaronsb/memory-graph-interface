@@ -2,6 +2,8 @@
 let graph;
 let bloomPass;
 let bloomEnabled = true;
+let showSummariesOnNodes = false; // Track if summaries should be shown on nodes
+let showEdgeLabels = true; // Track if edge labels should be shown
 let highlightNodes = new Set();
 let highlightLinks = new Set();
 let hoverNode = null;
@@ -84,6 +86,22 @@ document.addEventListener('DOMContentLoaded', () => {
   watcherToggle.addEventListener('click', toggleDatabaseWatcher);
   mainControls.appendChild(watcherToggle);
   
+  // Add a toggle button for showing summaries on nodes
+  const summariesToggle = document.createElement('button');
+  summariesToggle.id = 'toggle-summaries';
+  summariesToggle.textContent = 'Summaries on Nodes: OFF';
+  summariesToggle.style.backgroundColor = '#525252'; // Gray background when off
+  summariesToggle.addEventListener('click', toggleSummariesOnNodes);
+  mainControls.appendChild(summariesToggle);
+  
+  // Add a toggle button for showing edge labels
+  const edgeLabelsToggle = document.createElement('button');
+  edgeLabelsToggle.id = 'toggle-edge-labels';
+  edgeLabelsToggle.textContent = 'Edge Labels: ON';
+  edgeLabelsToggle.style.backgroundColor = '#2a9852'; // Green background when on
+  edgeLabelsToggle.addEventListener('click', toggleEdgeLabels);
+  mainControls.appendChild(edgeLabelsToggle);
+  
   // Add a database update indicator
   const dbUpdateIndicator = document.createElement('div');
   dbUpdateIndicator.id = 'db-update-indicator';
@@ -154,6 +172,70 @@ function initGraph() {
     .nodeLabel(node => getNodeLabel(node))
     .nodeColor(node => getNodeColor(node))
     .nodeRelSize(12) // Increased node size
+    .nodeThreeObject(node => {
+      // Only create text sprites for summaries when enabled
+      // Return null for the sphere to use the default rendering
+      if (showSummariesOnNodes && node.content_summary && typeof SpriteText !== 'undefined') {
+        // Format summary to show approximately two lines of text
+        // First, truncate to a reasonable length
+        let summaryText = node.content_summary;
+        if (summaryText.length > 80) {
+          summaryText = summaryText.substring(0, 80) + '...';
+        }
+        
+        // Insert a line break around the middle to create two lines
+        const midPoint = Math.floor(summaryText.length / 2);
+        // Find a space near the middle to break at
+        let breakPoint = summaryText.indexOf(' ', midPoint - 10);
+        if (breakPoint === -1 || breakPoint > midPoint + 10) {
+          // If no suitable space found, just break at the midpoint
+          breakPoint = midPoint;
+        }
+        
+        // Insert line break
+        summaryText = summaryText.substring(0, breakPoint) + '\n' + summaryText.substring(breakPoint + 1);
+        
+        // Create a group to hold the sprite
+        const group = new THREE.Group();
+        
+        const sprite = new SpriteText(summaryText);
+        sprite.color = '#ffffff';
+        sprite.textHeight = 2.5;
+        sprite.backgroundColor = 'rgba(0,0,0,0.6)';
+        sprite.padding = 2;
+        
+        // Position the sprite in the group
+        // We'll use the group to position it relative to the camera
+        sprite.position.set(0, 0, 0);
+        group.add(sprite);
+        
+        // Add a special update function to the group to make it face the camera
+        // and position it slightly in front of the node
+        group.onBeforeRender = (renderer, scene, camera) => {
+          // Get the direction vector from the node to the camera
+          const nodePos = new THREE.Vector3(node.x, node.y, node.z);
+          const cameraPos = new THREE.Vector3().copy(camera.position);
+          const direction = new THREE.Vector3().subVectors(cameraPos, nodePos).normalize();
+          
+          // Position the group in front of the node (half radius + 5%)
+          // Node radius is determined by nodeRelSize (12) and node.val
+          const nodeRadius = 12 * (node.val || 1);
+          const offset = nodeRadius * 0.55; // Half radius + 5%
+          
+          // Set the group position
+          group.position.copy(direction).multiplyScalar(offset);
+          
+          // Position the text above the node in local space
+          sprite.position.y = nodeRadius * 0.2; // Slight upward offset
+        };
+        
+        return group;
+      }
+      
+      // Return null to use the default node rendering
+      return null;
+    })
+    .nodeThreeObjectExtend(true) // Extend default nodes with our custom objects
     // Make links much more visible
     .linkWidth(link => highlightLinks.has(link) ? 5 : 2.5)
     .linkDirectionalParticles(link => Math.round((link.strength || 0.5) * 8))
@@ -166,8 +248,8 @@ function initGraph() {
     .linkLabel(link => `${link.type} (${link.strength.toFixed(2)})`) // Add label for links
     .linkThreeObjectExtend(true)
     .linkThreeObject(link => {
-      // Create text sprite for link labels
-      if (typeof SpriteText !== 'undefined') {
+      // Create text sprite for link labels only if edge labels are enabled
+      if (showEdgeLabels && typeof SpriteText !== 'undefined') {
         const sprite = new SpriteText(link.type);
         sprite.color = 'white'; // Brighter color
         sprite.textHeight = 4.0; // Increased text size (was 2.0)
@@ -816,9 +898,10 @@ function processGraphData(data, currentPositions = {}, preservePositions = false
 // Get node label for tooltips
 function getNodeLabel(node) {
   if (!node) return '';
-  // For memory nodes, show content preview and tags
-  const preview = node.content.length > 80 ? node.content.substring(0, 80) + '...' : node.content;
-  return `Memory: ${preview}\nTags: ${node.tags ? node.tags.join(', ') : ''}`;
+  // Use content_summary if available, otherwise fall back to truncated content
+  const displayText = node.content_summary || 
+    (node.content.length > 80 ? node.content.substring(0, 80) + '...' : node.content);
+  return `Memory: ${displayText}\nTags: ${node.tags ? node.tags.join(', ') : ''}`;
 }
 
 // Get node color based on tag name and highlight state
@@ -903,13 +986,31 @@ function showNodeInfo(node) {
   // Set node ID (memory id)
   nodeId.textContent = `Memory ID: ${node.id}`;
   
+  // Add summary section if available
+  let summaryElement = document.getElementById('node-summary');
+  if (summaryElement) {
+    summaryElement.remove(); // Remove existing summary if present
+  }
+  
+  if (node.content_summary) {
+    summaryElement = document.createElement('div');
+    summaryElement.id = 'node-summary';
+    summaryElement.className = 'summary';
+    summaryElement.textContent = node.content_summary;
+    // Insert summary before full content
+    nodeContent.parentNode.insertBefore(summaryElement, nodeContent);
+  }
+  
   // Set up copy to clipboard functionality
   copyButton.onclick = function() {
-    // Prepare content to copy (combine ID, tags, and content)
+    // Prepare content to copy (combine ID, tags, summary, and content)
     const tagsText = node.tags && node.tags.length > 0 ? 
       `Tags: ${node.tags.join(', ')}` : 'Tags: None';
     
-    const textToCopy = `${nodeId.textContent}\n${tagsText}\n\n${node.content}`;
+    const summaryText = node.content_summary ? 
+      `Summary: ${node.content_summary}\n\n` : '';
+    
+    const textToCopy = `${nodeId.textContent}\n${tagsText}\n\n${summaryText}${node.content}`;
     
     // Copy to clipboard
     navigator.clipboard.writeText(textToCopy)
@@ -1064,6 +1165,41 @@ function toggleBloomEffect() {
   } catch (error) {
     console.error('Error toggling bloom effect:', error);
   }
+}
+
+// Toggle summaries on nodes
+function toggleSummariesOnNodes() {
+  showSummariesOnNodes = !showSummariesOnNodes;
+  
+  // Update the button appearance
+  const toggleButton = document.getElementById('toggle-summaries');
+  if (toggleButton) {
+    toggleButton.textContent = `Summaries on Nodes: ${showSummariesOnNodes ? 'ON' : 'OFF'}`;
+    toggleButton.style.backgroundColor = showSummariesOnNodes ? '#2a9852' : '#525252'; // Green when on, gray when off
+  }
+  
+  console.log(`Summaries on nodes ${showSummariesOnNodes ? 'enabled' : 'disabled'}`);
+  
+  // Update the graph to reflect the new setting
+  // This forces a re-render of all nodes
+  graph.refresh();
+}
+
+// Toggle edge labels
+function toggleEdgeLabels() {
+  showEdgeLabels = !showEdgeLabels;
+  
+  // Update the button appearance
+  const toggleButton = document.getElementById('toggle-edge-labels');
+  if (toggleButton) {
+    toggleButton.textContent = `Edge Labels: ${showEdgeLabels ? 'ON' : 'OFF'}`;
+    toggleButton.style.backgroundColor = showEdgeLabels ? '#2a9852' : '#525252'; // Green when on, gray when off
+  }
+  
+  console.log(`Edge labels ${showEdgeLabels ? 'enabled' : 'disabled'}`);
+  
+  // Update the graph to reflect the new setting
+  graph.refresh();
 }
 
 // Function to check if the database file has been modified

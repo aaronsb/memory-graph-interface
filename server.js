@@ -493,7 +493,8 @@ app.get('/api/graph/memory', (req, res) => {
   const nodesQuery = `
     SELECT 
       n.id, 
-      n.content, 
+      n.content,
+      n.content_summary, 
       n.domain,
       n.path
     FROM MEMORY_NODES n
@@ -587,6 +588,7 @@ app.get('/api/graph/memory', (req, res) => {
       nodeMap[node.id] = {
         id: node.id,
         content: node.content,
+        content_summary: node.content_summary,
         domain: node.domain,
         path: node.path,
         tags: []
