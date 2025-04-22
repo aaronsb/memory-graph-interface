@@ -201,8 +201,15 @@ function initGraph() {
         const sprite = new SpriteText(summaryText);
         sprite.color = '#ffffff';
         sprite.textHeight = 2.5;
-        sprite.backgroundColor = 'rgba(0,0,0,0.6)';
-        sprite.padding = 2;
+        sprite.backgroundColor = 'rgba(0,0,0,0.8)'; // Increased opacity for better contrast
+        sprite.padding = 3; // Increased padding
+        // Add a subtle text shadow effect for better readability
+        if (sprite.material) {
+          sprite.material.userData = { 
+            outlineWidth: 0.1,
+            outlineColor: '#000000'
+          };
+        }
         
         // Position the sprite in the group
         // We'll use the group to position it relative to the camera
@@ -240,7 +247,7 @@ function initGraph() {
     .linkWidth(link => highlightLinks.has(link) ? 5 : 2.5)
     .linkDirectionalParticles(link => Math.round((link.strength || 0.5) * 8))
     .linkDirectionalParticleWidth(4)
-    .linkDirectionalParticleSpeed(d => d.strength * 0.01) // Particle speed based on strength
+    .linkDirectionalParticleSpeed(d => d.strength * 0.00167) // Particle speed reduced by 6x (0.01/6)
     .linkColor(link => getLinkColor(link))
     // Use link strength for link opacity and width
     .linkOpacity(1.0) // Increased opacity
@@ -252,9 +259,9 @@ function initGraph() {
       if (showEdgeLabels && typeof SpriteText !== 'undefined') {
         const sprite = new SpriteText(link.type);
         sprite.color = 'white'; // Brighter color
-        sprite.textHeight = 4.0; // Increased text size (was 2.0)
-        sprite.backgroundColor = 'rgba(0,0,0,0.3)'; // Semi-transparent background for better readability
-        sprite.padding = 2; // Add some padding around the text
+        sprite.textHeight = 4.0; // Increased text size
+        sprite.backgroundColor = 'rgba(0,0,0,0.7)'; // More opaque background for better contrast
+        sprite.padding = 3; // Increased padding for better readability
         return sprite;
       }
       return null;
@@ -767,9 +774,9 @@ function initGraph() {
   try {
     if (typeof THREE !== 'undefined' && THREE.UnrealBloomPass) {
       bloomPass = new THREE.UnrealBloomPass();
-      bloomPass.strength = 1.5;
-      bloomPass.radius = 1;
-      bloomPass.threshold = 0.1;
+      bloomPass.strength = 0.8;  // Reduced from 1.5 to reduce overexposure
+      bloomPass.radius = 0.8;    // Slightly reduced from 1
+      bloomPass.threshold = 0.2; // Increased from 0.1 to reduce bloom on darker areas
       graph.postProcessingComposer().addPass(bloomPass);
       console.log('Bloom effect added successfully');
     } else {
@@ -945,7 +952,15 @@ function getNodeColor(node) {
     const r = (hash & 0xFF0000) >> 16;
     const g = (hash & 0x00FF00) >> 8;
     const b = hash & 0x0000FF;
-    return `rgb(${(r+128)%256}, ${(g+128)%256}, ${(b+128)%256})`;
+    
+    // Create more muted colors with reduced saturation and brightness
+    // Add 100 instead of 128 to avoid overly bright colors
+    const rMuted = Math.min(((r + 100) % 256), 220);
+    const gMuted = Math.min(((g + 100) % 256), 220);
+    const bMuted = Math.min(((b + 100) % 256), 220);
+    
+    // Return the muted color with some transparency to reduce visual intensity
+    return `rgba(${rMuted}, ${gMuted}, ${bMuted}, 0.85)`;
   }
   return '#cccccc';
 }
@@ -1156,8 +1171,10 @@ function toggleBloomEffect() {
   
   try {
     if (bloomEnabled) {
-      bloomPass.strength = 4;
-      console.log('Bloom effect enabled');
+      bloomPass.strength = 0.8;  // Use the reduced strength value
+      bloomPass.radius = 0.8;    // Use the reduced radius value
+      bloomPass.threshold = 0.2; // Use the increased threshold value
+      console.log('Bloom effect enabled with reduced intensity');
     } else {
       bloomPass.strength = 0;
       console.log('Bloom effect disabled');
