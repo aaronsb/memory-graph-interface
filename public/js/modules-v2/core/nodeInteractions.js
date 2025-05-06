@@ -107,6 +107,9 @@ export function handleViewNodeDetails(node) {
       
       // Show the panel
       infoPanel.style.display = 'block';
+      
+      // Always show the tag input interface (with skipViewDetails=true to avoid infinite loop)
+      handleShowTagInput(node, true);
     }
     
     // If auto-zoom is enabled, zoom to the node
@@ -181,11 +184,14 @@ export function handleMultiSelectNode(node) {
  * Show the tag input for a node
  * @param {Object} node - The node to add tags to
  */
-export function handleShowTagInput(node) {
+export function handleShowTagInput(node, skipViewDetails = false) {
   console.log('Showing tag input for node:', node.id);
   
-  // First, ensure the info panel is shown for this node
-  handleViewNodeDetails(node);
+  // If not skipping view details, ensure the info panel is shown for this node
+  if (!skipViewDetails) {
+    handleViewNodeDetails(node);
+    return; // handleViewNodeDetails will call this function again with skipViewDetails=true
+  }
   
   // Get the node tags element
   const nodeTags = document.getElementById('node-tags');
@@ -687,7 +693,7 @@ export function handleLinkAllSelected() {
 eventBus.on('node:editTags', () => {
   const selectedNode = store.get('selectedNode');
   if (selectedNode) {
-    handleShowTagInput(selectedNode);
+    handleShowTagInput(selectedNode, true);
   }
 });
 

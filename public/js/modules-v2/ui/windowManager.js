@@ -355,16 +355,6 @@ export function initializeDraggableWindows() {
   // Info panel
   makeDraggable('info-panel', {
     controls: [
-      { 
-        icon: '📋', 
-        title: 'Copy to clipboard',
-        onClick: createControlHandlers.copyNodeContent()
-      },
-      {
-        icon: '✏️',
-        title: 'Edit tags',
-        onClick: createControlHandlers.editTags()
-      },
       {
         icon: '✖',
         title: 'Close',
