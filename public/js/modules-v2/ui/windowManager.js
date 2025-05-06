@@ -13,7 +13,8 @@ const EVENTS = {
   CONTENT_COPIED: 'content:copied',
   NODE_EDIT_TAGS: 'node:editTags',
   NODE_SELECTION_CLEARED: 'node:selectionCleared',
-  NODE_SELECTION_CHANGED: 'node:selectionChanged'
+  NODE_SELECTION_CHANGED: 'node:selectionChanged',
+  NODE_DELETE: 'node:delete'
 };
 
 // Register event handlers
@@ -329,6 +330,13 @@ const createControlHandlers = {
     };
   },
   
+  deleteNode: () => {
+    return () => {
+      // Emit an event to delete the node (to be handled by nodeInteractions)
+      eventBus.emit(EVENTS.NODE_DELETE, { node: null });
+    };
+  },
+  
   editTags: () => {
     return () => {
       // Emit an event to request tag editing
@@ -355,6 +363,17 @@ export function initializeDraggableWindows() {
   // Info panel
   makeDraggable('info-panel', {
     controls: [
+      { 
+        icon: '📋', 
+        title: 'Copy to clipboard',
+        onClick: createControlHandlers.copyNodeContent()
+      },
+      {
+        icon: '🗑️',
+        title: 'Delete node',
+        className: 'delete-button',
+        onClick: createControlHandlers.deleteNode()
+      },
       {
         icon: '✖',
         title: 'Close',

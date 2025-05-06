@@ -697,6 +697,14 @@ eventBus.on('node:editTags', () => {
   }
 });
 
+eventBus.on('node:delete', (data) => {
+  // If node is not provided, use the currently selected node
+  const node = data.node || store.get('selectedNode');
+  if (node) {
+    handleDeleteNode(node);
+  }
+});
+
 eventBus.on('node:selectionCleared', () => {
   // Clear selected node
   store.set('selectedNode', null);
