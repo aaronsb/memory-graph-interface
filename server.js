@@ -13,7 +13,8 @@ console.log(`Using database at: ${DB_PATH}`);
 // Track the last modification time of the database file
 let lastDatabaseModTime = null;
 
-// Serve static files
+// Middleware for parsing JSON and serving static files
+app.use(express.json());
 app.use(express.static('public'));
 
 // Database connection management
@@ -192,8 +193,95 @@ app.get('/api/edges', (req, res) => {
   });
 });
 
+// API endpoint to update a node's domain
+app.post('/api/nodes/update-domain', (req, res) => {
+  console.log('==== [API] POST /api/nodes/update-domain request received ====');
+  console.log('[API] Request body:', JSON.stringify(req.body, null, 2));
+  
+  const { nodeId, domain } = req.body;
+  
+  // Validate required fields
+  if (!nodeId || !domain) {
+    console.log('[API] POST /api/nodes/update-domain error: Missing required fields');
+    console.log('  nodeId:', nodeId);
+    console.log('  domain:', domain);
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  
+  // Check if node exists
+  const checkNodeQuery = `SELECT id, domain FROM MEMORY_NODES WHERE id = ?`;
+  
+  executeWithRetry((db, callback) => {
+    db.get(checkNodeQuery, [nodeId], callback);
+  }, 3, (err, node) => {
+    if (err) {
+      console.error('[API] Error checking node:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    
+    if (!node) {
+      console.log('[API] Error: Node does not exist');
+      return res.status(404).json({ error: 'Node not found' });
+    }
+    
+    // No need to update if domain is the same
+    if (node.domain === domain) {
+      console.log('[API] Node already has the requested domain, no update needed');
+      return res.json({ success: true, changed: false });
+    }
+    
+    // Update the node's domain
+    const updateQuery = `UPDATE MEMORY_NODES SET domain = ? WHERE id = ?`;
+    
+    executeWithRetry((db, callback) => {
+      db.run(updateQuery, [domain, nodeId], function(err) {
+        if (err) {
+          callback(err);
+        } else {
+          callback(null, { changes: this.changes });
+        }
+      });
+    }, 3, (err, result) => {
+      if (err) {
+        console.error('[API] Error updating node domain:', err.message);
+        return res.status(500).json({ error: err.message });
+      }
+      
+      console.log(`[API] Updated domain for node ${nodeId} from ${node.domain} to ${domain}`);
+      console.log('  Changes:', result.changes);
+      
+      // Also update all edges for this node to the new domain
+      const updateEdgesQuery = `UPDATE MEMORY_EDGES SET domain = ? WHERE source = ?`;
+      
+      executeWithRetry((db, callback) => {
+        db.run(updateEdgesQuery, [domain, nodeId], function(err) {
+          if (err) {
+            callback(err);
+          } else {
+            callback(null, { changes: this.changes });
+          }
+        });
+      }, 3, (edgeErr, edgeResult) => {
+        if (edgeErr) {
+          console.error('[API] Error updating edges domain:', edgeErr.message);
+          // We still consider the operation successful even if edge updates fail
+        } else {
+          console.log(`[API] Updated domain for ${edgeResult.changes} edges connected to node ${nodeId}`);
+        }
+        
+        res.json({ 
+          success: true, 
+          changed: true, 
+          nodeId,
+          oldDomain: node.domain,
+          newDomain: domain
+        });
+      });
+    });
+  });
+});
+
 // API endpoint to add a new edge (link) between two nodes
-app.use(express.json());
 app.post('/api/edges', (req, res) => {
   console.log('==== [API] POST /api/edges request received ====');
   console.log('[API] Request body:', JSON.stringify(req.body, null, 2));

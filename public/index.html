@@ -39,7 +39,25 @@
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Better font */
     }
     
-    #info-panel h3 {
+    /* Selection panel styles */
+    #selection-panel {
+      position: absolute;
+      top: 10px;
+      right: 10px; /* Default to same position as info panel, will be adjusted by JavaScript */
+      width: 350px;
+      transition: right 0.3s ease; /* Smooth transition when moving */
+      background-color: rgba(20, 20, 30, 0.9);
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
+      z-index: 10;
+      max-height: 85vh;
+      overflow-y: auto;
+      border: 1px solid rgba(100, 180, 100, 0.3); /* Green tint border to differentiate */
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    #info-panel h3, #selection-panel h3 {
       margin-top: 0;
       border-bottom: 1px solid #5a5a8a;
       padding-bottom: 12px;
@@ -50,7 +68,13 @@
       align-items: center;
     }
     
-    .copy-icon {
+    /* Green heading for selection panel to differentiate */
+    #selection-panel h3 {
+      color: #aaffcc; 
+      border-bottom: 1px solid #5a8a5a;
+    }
+    
+    .copy-icon, .close-icon {
       cursor: pointer;
       color: #aaccff;
       font-size: 16px;
@@ -59,9 +83,90 @@
       transition: all 0.2s ease;
     }
     
-    .copy-icon:hover {
+    .copy-icon:hover, .close-icon:hover {
       background-color: rgba(100, 100, 255, 0.2);
       transform: scale(1.1);
+    }
+    
+    /* Close icon specific styles */
+    .close-icon {
+      margin-left: 8px;
+      color: #ff8888;
+    }
+    
+    .close-icon:hover {
+      background-color: rgba(255, 100, 100, 0.2);
+    }
+    
+    /* Selection count badge */
+    .selection-count {
+      background-color: rgba(100, 180, 100, 0.5);
+      color: white;
+      border-radius: 12px;
+      padding: 2px 8px;
+      font-size: 14px;
+      margin-left: 8px;
+    }
+    
+    /* Selection list item styles */
+    #selection-list {
+      margin-top: 10px;
+    }
+    
+    .selection-item {
+      background-color: rgba(40, 40, 60, 0.7);
+      border-radius: 6px;
+      margin-bottom: 6px;
+      padding: 8px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+    
+    .selection-item:hover {
+      background-color: rgba(50, 50, 70, 0.9);
+      transform: translateY(-2px);
+    }
+    
+    .selection-item-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex-grow: 1;
+    }
+    
+    .selection-item-remove {
+      color: #ff8888;
+      cursor: pointer;
+      margin-left: 8px;
+      font-size: 16px;
+      opacity: 0.7;
+    }
+    
+    .selection-item-remove:hover {
+      opacity: 1;
+    }
+    
+    /* Selection actions */
+    #selection-actions {
+      margin-top: 15px;
+      display: flex;
+      justify-content: space-between;
+    }
+    
+    #selection-actions button {
+      flex: 1;
+      margin: 0 5px;
+      padding: 8px 0;
+    }
+    
+    #clear-selection-btn {
+      background-color: #d9534f;
+    }
+    
+    #link-selected-btn {
+      background-color: #5cb85c;
     }
     
     #info-panel .tag {
@@ -138,6 +243,117 @@
       font-size: 18px;
       color: #f0f0f0;
     }
+    
+    /* Context Menu Styles */
+    .context-menu-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      color: #f0f0f0;
+      font-size: 14px;
+      transition: background-color 0.2s;
+      border-radius: 4px;
+      margin: 2px;
+      user-select: none;
+    }
+    
+    .context-menu-item:hover {
+      background-color: rgba(100, 100, 255, 0.2);
+    }
+    
+    .context-menu-item.danger {
+      color: #ff6b6b;
+    }
+    
+    .context-menu-item.danger:hover {
+      background-color: rgba(255, 70, 70, 0.2);
+    }
+    
+    .context-menu-separator {
+      height: 1px;
+      background-color: rgba(150, 150, 255, 0.3);
+      margin: 5px 2px;
+    }
+    
+    .context-menu-header {
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: bold;
+      color: #aaccff;
+      border-bottom: 1px solid rgba(100, 100, 255, 0.3);
+      margin-bottom: 5px;
+    }
+    
+    /* Cascading Submenu Styles */
+    .context-menu-item.has-submenu {
+      position: relative;
+      padding-right: 24px; /* Space for the arrow */
+    }
+    
+    .context-menu-item.has-submenu::after {
+      content: '›';
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 16px;
+      color: #aaa;
+    }
+    
+    .context-submenu {
+      display: none;
+      position: absolute;
+      left: 100%;
+      top: 0;
+      background-color: rgba(30, 30, 40, 0.95);
+      border-radius: 6px;
+      border: 1px solid rgba(100, 100, 255, 0.3);
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
+      z-index: 1001;
+      min-width: 180px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    
+    .context-menu-item.has-submenu:hover > .context-submenu {
+      display: block;
+    }
+    
+    /* Pagination controls for the submenu */
+    .submenu-pagination {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 12px;
+      border-top: 1px solid rgba(100, 100, 255, 0.3);
+      margin-top: 5px;
+    }
+    
+    .pagination-button {
+      background-color: rgba(60, 60, 90, 0.7);
+      color: #fff;
+      border: none;
+      padding: 3px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background-color 0.2s;
+    }
+    
+    .pagination-button:hover {
+      background-color: rgba(80, 80, 120, 0.9);
+    }
+    
+    .pagination-button:disabled {
+      background-color: rgba(40, 40, 50, 0.5);
+      color: #999;
+      cursor: not-allowed;
+    }
+    
+    .pagination-info {
+      font-size: 12px;
+      color: #aaa;
+      text-align: center;
+      margin: 4px 0;
+    }
   </style>
   
   <!-- Import libraries -->
@@ -166,6 +382,21 @@
     <div id="node-content" class="content"></div>
   </div>
   
+  <!-- Multi-node selection panel -->
+  <div id="selection-panel" style="display: none;">
+    <h3>
+      <span id="selection-panel-title">Selected Nodes</span>
+      <span class="selection-count" id="selection-count">0</span>
+      <span class="copy-icon" id="selection-copy" title="Copy to clipboard">📋</span>
+      <span class="close-icon" id="selection-close" title="Close panel">✖</span>
+    </h3>
+    <div id="selection-list"></div>
+    <div id="selection-actions">
+      <button id="clear-selection-btn">Clear Selection</button>
+      <button id="link-selected-btn">Link All Selected</button>
+    </div>
+  </div>
+  
   <div id="controls">
     <button id="refresh-btn">Refresh Data</button>
     <button id="toggle-bloom">Toggle Bloom Effect</button>
@@ -180,6 +411,11 @@
       <button id="confirm-yes-btn" style="background-color: #d9534f; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; color: white;">Yes</button>
       <button id="confirm-no-btn" style="background-color: #5bc0de; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; color: white;">No</button>
     </div>
+  </div>
+  
+  <!-- Context Menu -->
+  <div id="context-menu" style="display: none; position: absolute; background-color: rgba(30, 30, 40, 0.95); border-radius: 6px; padding: 5px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.7); z-index: 1000; min-width: 180px; border: 1px solid rgba(100, 100, 255, 0.3);">
+    <!-- Menu items will be dynamically added based on context -->
   </div>
   
   <script src="js/app.js"></script>
