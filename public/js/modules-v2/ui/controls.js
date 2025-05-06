@@ -123,18 +123,24 @@ export function toggleHelpCard() {
   store.set('showHelpCard', showHelpCard);
   
   // Get the help card element
-  const helpCard = document.getElementById('link-hint');
+  const helpCard = document.getElementById('help-card');
   
   // Toggle visibility
   if (helpCard) {
     helpCard.style.display = showHelpCard ? 'block' : 'none';
-  }
-  
-  // Update the button appearance
-  const toggleButton = document.getElementById('toggle-help-card');
-  if (toggleButton) {
-    toggleButton.textContent = `Help Card: ${showHelpCard ? 'ON' : 'OFF'}`;
-    toggleButton.style.backgroundColor = showHelpCard ? '#3388ff' : '#525252';
+    
+    // Add event listener to close button if showing
+    if (showHelpCard) {
+      const closeButton = document.getElementById('help-card-close');
+      if (closeButton) {
+        // Remove any existing listener to avoid duplicates
+        closeButton.replaceWith(closeButton.cloneNode(true));
+        // Add new listener
+        document.getElementById('help-card-close').addEventListener('click', () => {
+          toggleHelpCard();
+        });
+      }
+    }
   }
   
   console.log(`Help card ${showHelpCard ? 'shown' : 'hidden'}`);
@@ -168,21 +174,6 @@ export function toggleMemoryDomainsPanel() {
  */
 export function setupUIEventListeners() {
   console.log('Setting up UI event listeners');
-  
-  // Toggle bloom effect
-  const bloomButton = document.getElementById('toggle-bloom');
-  if (bloomButton) {
-    bloomButton.addEventListener('click', toggleBloomEffect);
-  }
-  
-  // Refresh data
-  const refreshButton = document.getElementById('refresh-btn');
-  if (refreshButton) {
-    refreshButton.addEventListener('click', () => {
-      const loadData = require('../core/graph').loadData;
-      loadData(true); // preserve positions
-    });
-  }
   
   // Keyboard events for control key
   document.addEventListener('keydown', e => {

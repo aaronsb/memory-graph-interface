@@ -20,6 +20,7 @@
       left: 0;
       width: 100%;
       height: 100%;
+      pointer-events: auto; /* Ensure events propagate */
     }
     
     #info-panel {
@@ -178,6 +179,54 @@
       background-color: #5cb85c;
     }
     
+    /* Help Card Styles */
+    #help-card {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      width: 320px;
+      background-color: rgba(20, 20, 30, 0.9);
+      border-radius: 8px;
+      padding: 15px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
+      z-index: 1000;
+      border: 1px solid rgba(100, 100, 255, 0.3);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    #help-card h3 {
+      margin-top: 0;
+      border-bottom: 1px solid #5a5a8a;
+      padding-bottom: 12px;
+      color: #aaccff;
+      font-size: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .help-section {
+      margin-bottom: 15px;
+    }
+    
+    .help-section h4 {
+      color: #ccddff;
+      margin: 10px 0 5px 0;
+      font-size: 15px;
+    }
+    
+    .help-section ul {
+      margin: 5px 0;
+      padding-left: 20px;
+      list-style-type: none;
+    }
+    
+    .help-section li {
+      margin: 5px 0;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    
     #info-panel .tag {
       display: inline-block;
       background-color: #2a5298;
@@ -220,6 +269,7 @@
       border-left: 3px solid #4466aa; /* Left border accent */
     }
     
+    /* Old controls - removed in favor of menu bar 
     #controls {
       position: absolute;
       bottom: 10px;
@@ -229,6 +279,7 @@
       border-radius: 5px;
       padding: 10px;
     }
+    */
     
     button {
       background-color: #2a5298;
@@ -363,6 +414,131 @@
       text-align: center;
       margin: 4px 0;
     }
+    
+    /* CUA-Style Menu Bar Styles */
+    .menu-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: auto;
+      height: 40px;
+      background-color: rgba(30, 30, 40, 0.95);
+      display: flex;
+      z-index: 1500;
+      border-bottom: 1px solid rgba(100, 100, 255, 0.3);
+      border-right: 1px solid rgba(100, 100, 255, 0.3);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      border-radius: 0 0 4px 0;
+    }
+    
+    /* Menu Categories (File, Edit, etc.) */
+    .menu-category {
+      padding: 0 15px;
+      display: flex;
+      align-items: center;
+      height: 100%;
+      cursor: pointer;
+      user-select: none;
+      color: #f0f0f0;
+      font-size: 14px;
+      position: relative;
+    }
+    
+    .menu-category:hover {
+      background-color: rgba(50, 50, 70, 0.7);
+    }
+    
+    /* Dropdown menus */
+    .menu-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      min-width: 200px;
+      background-color: rgba(40, 40, 50, 0.95);
+      border: 1px solid rgba(100, 100, 255, 0.3);
+      border-top: none;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+      z-index: 1600;
+      padding: 5px 0;
+      border-radius: 0 0 4px 4px;
+    }
+    
+    /* Dropdown menu items */
+    .menu-dropdown-item {
+      padding: 8px 16px;
+      color: #f0f0f0;
+      font-size: 14px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    
+    .menu-dropdown-item:hover {
+      background-color: rgba(70, 70, 100, 0.7);
+    }
+    
+    .menu-dropdown-item.disabled {
+      color: #666;
+      cursor: default;
+    }
+    
+    .menu-dropdown-item.disabled:hover {
+      background-color: transparent;
+    }
+    
+    /* Menu item content layout */
+    .menu-item-content {
+      display: flex;
+      align-items: center;
+    }
+    
+    /* Check mark area */
+    .menu-check-area {
+      width: 16px;
+      margin-right: 8px;
+      text-align: center;
+      color: #88aaff; /* Blue checkmark */
+    }
+    
+    /* Label text */
+    .menu-item-label {
+      flex-grow: 1;
+    }
+    
+    /* Menu separators */
+    .menu-separator {
+      height: 1px;
+      background-color: rgba(100, 100, 255, 0.2);
+      margin: 5px 0;
+    }
+    
+    /* Legacy styles for compatibility */
+    .menu-item {
+      padding: 0 15px;
+      display: flex;
+      align-items: center;
+      height: 100%;
+      cursor: pointer;
+      user-select: none;
+      color: #f0f0f0;
+      font-size: 14px;
+      border-right: 1px solid rgba(100, 100, 255, 0.2);
+    }
+    
+    .menu-item:hover {
+      background-color: rgba(50, 50, 70, 0.7);
+    }
+    
+    .menu-item.disabled {
+      color: #666;
+      cursor: default;
+    }
+    
+    /* Adjust graph container for menu bar */
+    #graph-container {
+      padding-top: 40px;
+      /* No padding needed on the sides since menu doesn't stretch full width */
+    }
   </style>
   
   <!-- Import libraries -->
@@ -382,9 +558,9 @@
 <body>
   <div id="graph-container"></div>
   
-  <div id="info-panel">
+  <div id="info-panel" style="display: none;">
     <h3>
-      <span id="node-id">Node Details</span>
+      <span id="node-id">No Node Selected</span>
     </h3>
     <div id="node-tags"></div>
     <div id="node-content" class="content"></div>
@@ -404,9 +580,37 @@
     </div>
   </div>
   
-  <div id="controls">
-    <button id="refresh-btn">Refresh Data</button>
-    <button id="toggle-bloom">Toggle Bloom Effect</button>
+  <!-- Help Card with Keyboard/Mouse Controls -->
+  <div id="help-card" style="display: none;">
+    <h3>
+      <span>Keyboard & Mouse Controls</span>
+      <span class="close-icon" id="help-card-close">✖</span>
+    </h3>
+    <div class="help-content">
+      <div class="help-section">
+        <h4>Node Selection</h4>
+        <ul>
+          <li><strong>Click</strong> - Select a node</li>
+          <li><strong>Shift+Click</strong> - Add to multi-selection</li>
+          <li><strong>Ctrl+Click</strong> - Show connected nodes</li>
+        </ul>
+      </div>
+      <div class="help-section">
+        <h4>Navigation</h4>
+        <ul>
+          <li><strong>Mouse Wheel</strong> - Zoom in/out</li>
+          <li><strong>Left-drag</strong> - Rotate view</li>
+          <li><strong>Right-drag</strong> - Pan view</li>
+        </ul>
+      </div>
+      <div class="help-section">
+        <h4>Node Manipulation</h4>
+        <ul>
+          <li><strong>Drag Node</strong> - Move node</li>
+          <li><strong>Right-click</strong> - Open context menu</li>
+        </ul>
+      </div>
+    </div>
   </div>
   
   <div class="loading" id="loading-indicator">Loading memory graph data...</div>

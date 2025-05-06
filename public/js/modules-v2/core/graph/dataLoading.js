@@ -20,7 +20,7 @@ export function loadData(preservePositions = false, skipLinks = false) {
   // Store current positions if preserving
   const currentPositions = {};
   const graphData = store.get('graphData');
-  const currentLinks = skipLinks ? graphData.links : [];
+  const currentLinks = skipLinks ? (graphData?.links || []) : [];
   
   if (preservePositions && graphData && graphData.nodes) {
     graphData.nodes.forEach(node => {
@@ -41,6 +41,21 @@ export function loadData(preservePositions = false, skipLinks = false) {
   
   // Return a promise that resolves when the data loading is complete
   return new Promise((resolve, reject) => {
+    // Set a timeout to handle the case where the fetch takes too long
+    const timeoutId = setTimeout(() => {
+      console.warn('Data loading timeout - using empty data');
+      document.getElementById('loading-indicator').style.display = 'none';
+      
+      // Create and process empty data
+      const emptyData = { 
+        nodes: [], 
+        links: [] 
+      };
+      
+      processGraphData(emptyData, {}, false);
+      resolve(emptyData);
+    }, 3000); // 3 second timeout
+    
     // Fetch data from API
     fetch('/api/graph/memory')
       .then(response => {
@@ -48,6 +63,7 @@ export function loadData(preservePositions = false, skipLinks = false) {
         return response.json();
       })
       .then(data => {
+        clearTimeout(timeoutId); // Clear the timeout
         console.log('Data received:', data);
         
         // If skipLinks is true, replace links in the data with the stored links
@@ -75,10 +91,19 @@ export function loadData(preservePositions = false, skipLinks = false) {
         resolve(data);
       })
       .catch(error => {
+        clearTimeout(timeoutId); // Clear the timeout
         console.error('Error loading graph data:', error);
         
         // Hide the loading indicator instead of showing an error
         document.getElementById('loading-indicator').style.display = 'none';
+        
+        // Create and process empty data
+        const emptyData = { 
+          nodes: [], 
+          links: [] 
+        };
+        
+        processGraphData(emptyData, {}, false);
         
         // Check if we need to show an error to the user
         if (!skipLinks) {
@@ -103,8 +128,8 @@ export function loadData(preservePositions = false, skipLinks = false) {
           }, 3000);
         }
         
-        // Reject the promise with the error
-        reject(error);
+        // Resolve with empty data instead of rejecting
+        resolve(emptyData);
       });
   });
 }
