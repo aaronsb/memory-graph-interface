@@ -12,6 +12,16 @@ let selectedHighlightNodes = new Set(); // Only nodes highlighted due to selecti
 let selectedHighlightLinks = new Set(); // Only links highlighted due to selection
 let hoverHighlightNodes = new Set(); // Only nodes highlighted due to hover
 let hoverHighlightLinks = new Set(); // Only links highlighted due to hover
+
+// Context menu variables
+let contextMenuActive = false;
+let contextMenuNode = null;
+let contextMenuLink = null;
+let contextMenuPosition = { x: 0, y: 0 };
+
+// Link creation mode state
+let linkCreationMode = false;
+let linkSourceNode = null;
 let hoverNode = null;
 let hoverLink = null; // Track the link being hovered
 let selectedNode = null;
@@ -52,7 +62,8 @@ document.addEventListener('DOMContentLoaded', () => {
     • <span style="color:#3388ff">Click</span> a node to select it and view details<br>
     • <span style="color:#ff5500">Hover</span> over nodes to see connections<br>
     • <span style="color:#ff00ff">Control-click</span> a link to delete it<br>
-    • <span style="color:#ff00ff">Control-click</span> a node to delete it and its connections
+    • <span style="color:#ff00ff">Control-click</span> a node to delete it and its connections<br>
+    • <span style="color:#ffffff">Right-click</span> for context menu on nodes and links
   `;
   document.body.appendChild(hint);
   
@@ -262,6 +273,66 @@ document.addEventListener('DOMContentLoaded', () => {
     hoverHighlightLinks.clear();
     updateCombinedHighlights();
     updateHighlight();
+    
+    // If in link creation mode, exit it when window loses focus
+    if (linkCreationMode) {
+      toggleLinkCreationMode();
+    }
+    
+    // Hide context menu if it's open
+    if (contextMenuActive) {
+      hideContextMenu();
+    }
+  });
+  
+  // Add document-level event listeners for the context menu
+  
+  // Hide context menu on regular click outside the menu
+  document.addEventListener('click', (event) => {
+    if (contextMenuActive && !document.getElementById('context-menu').contains(event.target)) {
+      hideContextMenu();
+    }
+  });
+  
+  // Hide context menu and cancel link creation on ESC key
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      // Hide context menu if active
+      if (contextMenuActive) {
+        hideContextMenu();
+      }
+      
+      // Cancel link creation mode if active
+      if (linkCreationMode) {
+        toggleLinkCreationMode();
+      }
+    }
+  });
+  
+  // Prevent default right-click behavior only when needed
+  document.addEventListener('contextmenu', (event) => {
+    // Allow default context menu in input fields and other interactive elements
+    if (event.target.tagName === 'INPUT' || 
+        event.target.tagName === 'TEXTAREA' || 
+        event.target.isContentEditable) {
+      return true;
+    }
+    
+    // If it's from the graph container, let the 3D graph's handler deal with it
+    if (document.getElementById('graph-container').contains(event.target)) {
+      return false; // Prevent default, our 3D graph will handle it
+    }
+    
+    // For other parts of the app, prevent default but don't show our custom menu
+    if (['context-menu', 'controls', 'info-panel'].some(id => 
+        document.getElementById(id)?.contains(event.target))) {
+      event.preventDefault();
+      hideContextMenu();
+      return false;
+    }
+    
+    // Allow default browser context menu elsewhere
+    return true;
   });
 });
 
@@ -273,6 +344,27 @@ function initGraph() {
     .nodeLabel(node => getNodeLabel(node))
     .nodeColor(node => getNodeColor(node))
     .nodeRelSize(12) // Increased node size
+    
+    // Add right-click handling for context menu
+    .onNodeRightClick((node, event) => {
+      event.preventDefault();
+      const { clientX, clientY } = event;
+      showContextMenu(clientX, clientY, node, null);
+      return false;
+    })
+    .onLinkRightClick((link, event) => {
+      event.preventDefault();
+      const { clientX, clientY } = event;
+      showContextMenu(clientX, clientY, null, link);
+      return false;
+    })
+    .onBackgroundRightClick((event) => {
+      event.preventDefault();
+      const { clientX, clientY } = event;
+      showContextMenu(clientX, clientY);
+      return false;
+    })
+    
     .nodeThreeObject(node => {
       // Only create text sprites for summaries when enabled
       // Return null for the sphere to use the default rendering
@@ -425,15 +517,9 @@ function initGraph() {
           }
         });
         
-        // Show info panel only if no node is currently selected
-        if (!selectedNode) {
-          showNodeInfo(node);
-        }
+        // No longer show info panel on hover - require explicit click instead
       } else {
-        // Hide info panel only if no node is currently selected
-        if (!selectedNode) {
-          hideNodeInfo();
-        }
+        // Don't hide info panel on hover out - only hide on explicit deselection
       }
       
       hoverNode = node || null;
@@ -462,57 +548,23 @@ function initGraph() {
       }
     })
     .onNodeClick((node, event) => {
+      // Check if we're in link creation mode
+      if (linkCreationMode && linkSourceNode) {
+        // If the clicked node is not the source node
+        if (node.id !== linkSourceNode.id) {
+          // Create link between source node and this node
+          handleCreateLink(linkSourceNode, node);
+        } else {
+          // Cancel link creation if source node is clicked again
+          toggleLinkCreationMode();
+        }
+        return; // Exit early to prevent other click behaviors
+      }
+      
       // Check if control key is pressed for node deletion
       if (controlKeyPressed) {
         console.log('Control-click detected on node:', node.id);
-        
-        // Show custom confirmation dialog
-        showCustomConfirmDialog(
-          `Are you sure you want to delete this memory node and all its connections?\n\nMemory ID: ${node.id}`,
-          () => {
-            // Yes callback
-            console.log(`[API] Deleting node with ID: ${node.id}`);
-            
-            // Delete the node via API
-            fetch(`/api/nodes/${node.id}`, {
-              method: 'DELETE'
-            })
-            .then(res => {
-              console.log('[API] Received response for DELETE /api/nodes', res);
-              return res.json();
-            })
-            .then(result => {
-              console.log('[API] Response JSON for DELETE /api/nodes', result);
-              if (result.success) {
-                // If the deleted node was selected, clear the selection
-                if (selectedNode && selectedNode.id === node.id) {
-                  selectedNode = null;
-                  hideNodeInfo();
-                  // Clear selection highlights
-                  selectedHighlightNodes.clear();
-                  selectedHighlightLinks.clear();
-                  updateCombinedHighlights();
-                }
-                
-                // Remove the node from selectedNodes if it's there
-                const nodeIndex = selectedNodes.findIndex(n => n.id === node.id);
-                if (nodeIndex !== -1) {
-                  selectedNodes.splice(nodeIndex, 1);
-                }
-                
-                // Reload data with position preservation
-                loadData(true);
-                console.log('Node deleted successfully');
-              } else {
-                alert('Failed to delete node: ' + (result.error || 'Unknown error'));
-              }
-            })
-            .catch(err => {
-              console.error('[API] Error deleting node:', err);
-              alert('Error deleting node: ' + err);
-            });
-          }
-        );
+        handleDeleteNode(node);
         return; // Exit early to prevent other click behaviors
       }
       
@@ -535,42 +587,8 @@ function initGraph() {
         if (selectedNodes.length === 2) {
           const source = selectedNodes[0];
           const target = selectedNodes[1];
-          console.log('Creating link between nodes:', source.id, 'and', target.id);
-          
-          // Create link via API
-          const linkPayload = {
-            source: source.id,
-            target: target.id,
-            type: 'relates_to',
-            strength: 0.7,
-            domain: source.domain
-          };
-          
-          console.log('[API] Sending POST /api/edges', linkPayload);
-          fetch('/api/edges', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(linkPayload)
-          })
-          .then(res => {
-            console.log('[API] Received response for POST /api/edges', res);
-            return res.json();
-          })
-          .then(result => {
-            console.log('[API] Response JSON for POST /api/edges', result);
-            if (result.success) {
-              // Clear selection and reload data with position preservation
-              selectedNodes = [];
-              loadData(true);
-              console.log('Link created successfully, selection cleared');
-            } else {
-              alert('Failed to create link: ' + (result.error || 'Unknown error'));
-            }
-          })
-          .catch(err => {
-            console.error('[API] Error creating link:', err);
-            alert('Error creating link: ' + err);
-          });
+          handleCreateLink(source, target);
+          selectedNodes = []; // Clear the selection after creating the link
         }
         
         // Update highlight to show selected nodes
@@ -578,107 +596,14 @@ function initGraph() {
         updateHighlight();
       } else {
         // Regular click behavior (non-shift)
-        if (selectedNode && node.id === selectedNode.id) {
-          // Deselect if already selected
-          selectedNode = null;
-          hideNodeInfo();
-          // Clear all selection highlights
-          selectedHighlightNodes.clear();
-          selectedHighlightLinks.clear();
-        } else {
-          // Clear previous selection highlights if selecting a new node
-          selectedHighlightNodes.clear();
-          selectedHighlightLinks.clear();
-          
-          selectedNode = node;
-          
-          // Add the selected node to selection highlights
-          selectedHighlightNodes.add(node);
-          
-          // Add connected nodes and links to selection highlights
-          graphData.links.forEach(link => {
-            const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-            const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-            
-            if (sourceId === node.id || targetId === node.id) {
-              selectedHighlightLinks.add(link);
-              selectedHighlightNodes.add(sourceId === node.id ? link.target : link.source);
-            }
-          });
-          
-          showNodeInfo(node);
-        }
-        
-        // Update the combined highlight sets
-        updateCombinedHighlights();
-        updateHighlight();
-
-        // Center view on node only if zoom on select is enabled
-        if (zoomOnSelect) {
-          try {
-            // Use the camera controls to look at the node
-            // Increased distance for a more zoomed-out view (4x further away)
-            const distance = 160; // Was 40, increased to zoom out
-            const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
-            
-            if (graph.cameraPosition) {
-              graph.cameraPosition(
-                { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, // new position
-                node, // lookAt
-                2000  // transition duration (slightly faster)
-              );
-            } else {
-              console.warn('graph.cameraPosition not available, cannot center view');
-            }
-          } catch (err) {
-            console.error('Error centering view on node:', err);
-          }
-        }
+        handleViewNodeDetails(node);
       }
     })
     .onLinkClick((link, event) => {
       // Only handle link clicks when Control key is pressed
       if (controlKeyPressed && hoverLink === link) {
         console.log('Control-click detected on link:', link);
-        
-        // Get source and target IDs
-        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-        
-        // Show custom confirmation dialog
-        showCustomConfirmDialog(
-          `Are you sure you want to delete this link?\n\nFrom: ${sourceId}\nTo: ${targetId}`,
-          () => {
-            // Yes callback
-            console.log(`[API] Deleting link between ${sourceId} and ${targetId}`);
-            
-            // Immediately clear the highlight to provide visual feedback
-            highlightLinks.clear();
-            updateHighlight();
-            
-            fetch(`/api/edges/${sourceId}/${targetId}`, {
-              method: 'DELETE'
-            })
-            .then(res => {
-              console.log('[API] Received response for DELETE /api/edges', res);
-              return res.json();
-            })
-            .then(result => {
-              console.log('[API] Response JSON for DELETE /api/edges', result);
-              if (result.success) {
-                // Reload data with position preservation
-                loadData(true);
-                console.log('Link deleted successfully');
-              } else {
-                alert('Failed to delete link: ' + (result.error || 'Unknown error'));
-              }
-            })
-            .catch(err => {
-              console.error('[API] Error deleting link:', err);
-              alert('Error deleting link: ' + err);
-            });
-          }
-        );
+        handleDeleteLink(link);
       }
     })
     .onNodeDrag((node, translate) => {
@@ -1470,6 +1395,475 @@ function toggleHelpCard() {
   }
   
   console.log(`Help card ${showHelpCard ? 'shown' : 'hidden'}`);
+}
+
+// Show context menu at the specified position
+function showContextMenu(x, y, node = null, link = null) {
+  const contextMenu = document.getElementById('context-menu');
+  if (!contextMenu) return;
+  
+  // Clear previous menu items
+  contextMenu.innerHTML = '';
+  
+  // Set context menu position variables
+  contextMenuPosition = { x, y };
+  contextMenuNode = node;
+  contextMenuLink = link;
+  contextMenuActive = true;
+  
+  // Position the menu near the cursor but ensure it stays within viewport
+  contextMenu.style.left = `${x}px`;
+  contextMenu.style.top = `${y}px`;
+  
+  // Populate menu items based on context
+  populateContextMenu(contextMenu, node, link);
+  
+  // Show the menu
+  contextMenu.style.display = 'block';
+  
+  // Check if menu goes off-screen and adjust position if needed
+  const menuRect = contextMenu.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  
+  if (menuRect.right > viewportWidth) {
+    contextMenu.style.left = `${x - menuRect.width}px`;
+  }
+  
+  if (menuRect.bottom > viewportHeight) {
+    contextMenu.style.top = `${y - menuRect.height}px`;
+  }
+  
+  console.log(`Context menu shown for ${node ? 'node ' + node.id : (link ? 'link' : 'background')}`);
+}
+
+// Populate the context menu with items based on what was right-clicked
+function populateContextMenu(contextMenu, node, link) {
+  // Different menu items depending on what was clicked
+  if (node) {
+    // Add header showing what node was clicked
+    const header = document.createElement('div');
+    header.className = 'context-menu-header';
+    header.textContent = `Node: ${node.id.substring(0, 20)}${node.id.length > 20 ? '...' : ''}`;
+    contextMenu.appendChild(header);
+    
+    // View details
+    const viewDetailsItem = document.createElement('div');
+    viewDetailsItem.className = 'context-menu-item';
+    viewDetailsItem.textContent = 'View Details';
+    viewDetailsItem.addEventListener('click', () => {
+      handleViewNodeDetails(node);
+      hideContextMenu();
+    });
+    contextMenu.appendChild(viewDetailsItem);
+    
+    // Create link from this node
+    const createLinkItem = document.createElement('div');
+    createLinkItem.className = 'context-menu-item';
+    createLinkItem.textContent = 'Create Link...';
+    createLinkItem.addEventListener('click', () => {
+      toggleLinkCreationMode(node);
+      hideContextMenu();
+    });
+    contextMenu.appendChild(createLinkItem);
+    
+    // Add Tags
+    const addTagsItem = document.createElement('div');
+    addTagsItem.className = 'context-menu-item';
+    addTagsItem.textContent = 'Add Tags...';
+    addTagsItem.addEventListener('click', () => {
+      handleShowTagInput(node);
+      hideContextMenu();
+    });
+    contextMenu.appendChild(addTagsItem);
+    
+    // Add separator
+    const separator = document.createElement('div');
+    separator.className = 'context-menu-separator';
+    contextMenu.appendChild(separator);
+    
+    // Delete node
+    const deleteItem = document.createElement('div');
+    deleteItem.className = 'context-menu-item danger';
+    deleteItem.textContent = 'Delete Node';
+    deleteItem.addEventListener('click', () => {
+      handleDeleteNode(node);
+      hideContextMenu();
+    });
+    contextMenu.appendChild(deleteItem);
+    
+  } else if (link) {
+    // Add header showing what link was clicked
+    const header = document.createElement('div');
+    header.className = 'context-menu-header';
+    const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+    const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+    header.textContent = `Link: ${sourceId.substring(0, 10)}... → ${targetId.substring(0, 10)}...`;
+    contextMenu.appendChild(header);
+    
+    // Link information
+    const linkTypeItem = document.createElement('div');
+    linkTypeItem.className = 'context-menu-item';
+    linkTypeItem.textContent = `Type: ${link.type || 'Unknown'}`;
+    linkTypeItem.style.fontStyle = 'italic';
+    linkTypeItem.style.opacity = '0.8';
+    contextMenu.appendChild(linkTypeItem);
+    
+    const linkStrengthItem = document.createElement('div');
+    linkStrengthItem.className = 'context-menu-item';
+    linkStrengthItem.textContent = `Strength: ${(link.strength || 0).toFixed(2)}`;
+    linkStrengthItem.style.fontStyle = 'italic';
+    linkStrengthItem.style.opacity = '0.8';
+    contextMenu.appendChild(linkStrengthItem);
+    
+    // Add separator
+    const separator = document.createElement('div');
+    separator.className = 'context-menu-separator';
+    contextMenu.appendChild(separator);
+    
+    // Delete link
+    const deleteItem = document.createElement('div');
+    deleteItem.className = 'context-menu-item danger';
+    deleteItem.textContent = 'Delete Link';
+    deleteItem.addEventListener('click', () => {
+      handleDeleteLink(link);
+      hideContextMenu();
+    });
+    contextMenu.appendChild(deleteItem);
+    
+  } else {
+    // Background click - general actions
+    const header = document.createElement('div');
+    header.className = 'context-menu-header';
+    header.textContent = 'Memory Graph';
+    contextMenu.appendChild(header);
+    
+    // Refresh data
+    const refreshItem = document.createElement('div');
+    refreshItem.className = 'context-menu-item';
+    refreshItem.textContent = 'Refresh Data';
+    refreshItem.addEventListener('click', () => {
+      loadData();
+      hideContextMenu();
+    });
+    contextMenu.appendChild(refreshItem);
+  }
+}
+
+// Hide the context menu
+function hideContextMenu() {
+  const contextMenu = document.getElementById('context-menu');
+  if (!contextMenu) return;
+  
+  contextMenu.style.display = 'none';
+  contextMenuActive = false;
+  contextMenuNode = null;
+  contextMenuLink = null;
+  
+  console.log('Context menu hidden');
+}
+
+// Handler functions for node and link actions - abstracted to be shared between click actions and context menu
+
+// Handle viewing node details
+function handleViewNodeDetails(node) {
+  // Set the selected node
+  if (selectedNode && node.id === selectedNode.id) {
+    // Deselect if already selected
+    selectedNode = null;
+    hideNodeInfo();
+    // Clear all selection highlights
+    selectedHighlightNodes.clear();
+    selectedHighlightLinks.clear();
+  } else {
+    // Clear previous selection highlights if selecting a new node
+    selectedHighlightNodes.clear();
+    selectedHighlightLinks.clear();
+    
+    selectedNode = node;
+    
+    // Add the selected node to selection highlights
+    selectedHighlightNodes.add(node);
+    
+    // Add connected nodes and links to selection highlights
+    graphData.links.forEach(link => {
+      const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+      const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+      
+      if (sourceId === node.id || targetId === node.id) {
+        selectedHighlightLinks.add(link);
+        selectedHighlightNodes.add(sourceId === node.id ? link.target : link.source);
+      }
+    });
+    
+    showNodeInfo(node);
+  }
+  
+  // Update the combined highlight sets
+  updateCombinedHighlights();
+  updateHighlight();
+  
+  // Center view on node only if zoom on select is enabled
+  if (zoomOnSelect) {
+    try {
+      // Use the camera controls to look at the node
+      // Increased distance for a more zoomed-out view (4x further away)
+      const distance = 160; // Was 40, increased to zoom out
+      const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
+      
+      if (graph.cameraPosition) {
+        graph.cameraPosition(
+          { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, // new position
+          node, // lookAt
+          2000  // transition duration (slightly faster)
+        );
+      } else {
+        console.warn('graph.cameraPosition not available, cannot center view');
+      }
+    } catch (err) {
+      console.error('Error centering view on node:', err);
+    }
+  }
+}
+
+// Handle showing tag input for a node
+function handleShowTagInput(node) {
+  // First, select the node
+  if (selectedNode !== node) {
+    handleViewNodeDetails(node);
+  }
+  
+  // Focus the tag input
+  setTimeout(() => {
+    const tagInput = document.getElementById('tag-input');
+    if (tagInput) {
+      tagInput.focus();
+    }
+  }, 100);
+}
+
+// Handle deleting a node
+function handleDeleteNode(node) {
+  // Show custom confirmation dialog
+  showCustomConfirmDialog(
+    `Are you sure you want to delete this memory node and all its connections?\n\nMemory ID: ${node.id}`,
+    () => {
+      // Yes callback
+      console.log(`[API] Deleting node with ID: ${node.id}`);
+      
+      // Delete the node via API
+      fetch(`/api/nodes/${node.id}`, {
+        method: 'DELETE'
+      })
+      .then(res => {
+        console.log('[API] Received response for DELETE /api/nodes', res);
+        return res.json();
+      })
+      .then(result => {
+        console.log('[API] Response JSON for DELETE /api/nodes', result);
+        if (result.success) {
+          // If the deleted node was selected, clear the selection
+          if (selectedNode && selectedNode.id === node.id) {
+            selectedNode = null;
+            hideNodeInfo();
+            // Clear selection highlights
+            selectedHighlightNodes.clear();
+            selectedHighlightLinks.clear();
+            updateCombinedHighlights();
+          }
+          
+          // Remove the node from selectedNodes if it's there
+          const nodeIndex = selectedNodes.findIndex(n => n.id === node.id);
+          if (nodeIndex !== -1) {
+            selectedNodes.splice(nodeIndex, 1);
+          }
+          
+          // Reload data with position preservation
+          loadData(true);
+          console.log('Node deleted successfully');
+        } else {
+          alert('Failed to delete node: ' + (result.error || 'Unknown error'));
+        }
+      })
+      .catch(err => {
+        console.error('[API] Error deleting node:', err);
+        alert('Error deleting node: ' + err);
+      });
+    }
+  );
+}
+
+// Handle deleting a link
+function handleDeleteLink(link) {
+  // Get source and target IDs
+  const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+  const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+  
+  // Show custom confirmation dialog
+  showCustomConfirmDialog(
+    `Are you sure you want to delete this link?\n\nFrom: ${sourceId}\nTo: ${targetId}`,
+    () => {
+      // Yes callback
+      console.log(`[API] Deleting link between ${sourceId} and ${targetId}`);
+      
+      // Immediately clear the highlight to provide visual feedback
+      highlightLinks.clear();
+      updateHighlight();
+      
+      fetch(`/api/edges/${sourceId}/${targetId}`, {
+        method: 'DELETE'
+      })
+      .then(res => {
+        console.log('[API] Received response for DELETE /api/edges', res);
+        return res.json();
+      })
+      .then(result => {
+        console.log('[API] Response JSON for DELETE /api/edges', result);
+        if (result.success) {
+          // Reload data with position preservation
+          loadData(true);
+          console.log('Link deleted successfully');
+        } else {
+          alert('Failed to delete link: ' + (result.error || 'Unknown error'));
+        }
+      })
+      .catch(err => {
+        console.error('[API] Error deleting link:', err);
+        alert('Error deleting link: ' + err);
+      });
+    }
+  );
+}
+
+// Toggle link creation mode
+function toggleLinkCreationMode(sourceNode = null) {
+  // If turning off link creation mode
+  if (linkCreationMode && !sourceNode) {
+    linkCreationMode = false;
+    linkSourceNode = null;
+    
+    // Clear any visual indicators
+    selectedHighlightNodes.clear();
+    updateCombinedHighlights();
+    updateHighlight();
+    
+    // Update UI to show that link creation mode is off
+    const notificationContainer = document.getElementById('notification-container');
+    if (notificationContainer) {
+      notificationContainer.style.display = 'none';
+    }
+    
+    console.log('Link creation mode disabled');
+    return;
+  }
+  
+  // If turning on link creation mode with a source node
+  if (sourceNode) {
+    linkCreationMode = true;
+    linkSourceNode = sourceNode;
+    
+    // Hide context menu if it's open
+    if (contextMenuActive) {
+      hideContextMenu();
+    }
+    
+    // Highlight the source node
+    selectedHighlightNodes.clear();
+    selectedHighlightNodes.add(sourceNode);
+    updateCombinedHighlights();
+    updateHighlight();
+    
+    // Show UI notification
+    let notificationContainer = document.getElementById('notification-container');
+    if (!notificationContainer) {
+      // Create container if it doesn't exist
+      notificationContainer = document.createElement('div');
+      notificationContainer.id = 'notification-container';
+      notificationContainer.style.position = 'fixed';
+      notificationContainer.style.top = '80px';
+      notificationContainer.style.left = '50%';
+      notificationContainer.style.transform = 'translateX(-50%)';
+      notificationContainer.style.background = 'rgba(0, 160, 0, 0.9)';
+      notificationContainer.style.color = 'white';
+      notificationContainer.style.padding = '10px 16px';
+      notificationContainer.style.borderRadius = '5px';
+      notificationContainer.style.zIndex = '1000';
+      notificationContainer.style.fontWeight = 'bold';
+      notificationContainer.style.boxShadow = '0 4px 10px rgba(0, 0, 0, 0.3)';
+      document.body.appendChild(notificationContainer);
+    }
+    
+    notificationContainer.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span>Link creation mode: Click another node to create a link</span>
+        <button id="cancel-link-creation" style="background: #444; border: none; color: white; padding: 3px 8px; border-radius: 3px; cursor: pointer;">Cancel</button>
+      </div>
+    `;
+    notificationContainer.style.display = 'block';
+    
+    // Add cancel button handler
+    document.getElementById('cancel-link-creation').addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggleLinkCreationMode();
+    });
+    
+    console.log('Link creation mode enabled with source node:', sourceNode.id);
+  }
+}
+
+// Handle creating a link between two nodes
+function handleCreateLink(source, target) {
+  if (!source || !target || source.id === target.id) {
+    console.warn('Invalid link creation attempt - missing nodes or same node:', source, target);
+    return;
+  }
+  
+  console.log('Creating link between nodes:', source.id, 'and', target.id);
+  
+  // Create link via API
+  const linkPayload = {
+    source: source.id,
+    target: target.id,
+    type: 'relates_to',
+    strength: 0.7,
+    domain: source.domain || target.domain // Use either domain, preferring source
+  };
+  
+  console.log('[API] Sending POST /api/edges', linkPayload);
+  fetch('/api/edges', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(linkPayload)
+  })
+  .then(res => {
+    console.log('[API] Received response for POST /api/edges', res);
+    return res.json();
+  })
+  .then(result => {
+    console.log('[API] Response JSON for POST /api/edges', result);
+    if (result.success) {
+      // Clear selection and reload data with position preservation
+      loadData(true);
+      console.log('Link created successfully');
+    } else {
+      // Don't throw an alert for already existing links, just show a console message
+      if (result.error && result.error.includes('Edge already exists')) {
+        console.log('Link already exists, no changes made');
+      } else {
+        alert('Failed to create link: ' + (result.error || 'Unknown error'));
+      }
+    }
+    
+    // Turn off link creation mode
+    toggleLinkCreationMode();
+  })
+  .catch(err => {
+    console.error('[API] Error creating link:', err);
+    alert('Error creating link: ' + err);
+    
+    // Turn off link creation mode
+    toggleLinkCreationMode();
+  });
 }
 
 // Function to check if the database file has been modified
