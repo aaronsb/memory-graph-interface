@@ -27,12 +27,15 @@ const BASE_RECONNECT_DELAY = 500; // 500ms initial delay
 /**
  * Connect to the database with exponential backoff retry logic
  * @param {boolean} isReconnect - Whether this is a reconnection attempt
- * @param {function} callback - Optional callback to execute after connection
+ * @param {function} callback - Optional callback to execute after connection, callback(err, result)
  */
 function connectToDatabase(isReconnect = false, callback = null) {
   // Prevent multiple simultaneous connection attempts
   if (isConnecting) {
     console.log('Connection attempt already in progress, skipping');
+    if (callback && typeof callback === 'function') {
+      callback(new Error('Connection attempt already in progress'));
+    }
     return;
   }
   
@@ -68,6 +71,11 @@ function connectToDatabase(isReconnect = false, callback = null) {
       } else {
         console.error(`Failed to connect after ${MAX_RECONNECT_ATTEMPTS} attempts. Giving up.`);
         reconnectAttempts = 0; // Reset for future attempts
+        
+        // Execute callback with error if provided
+        if (callback && typeof callback === 'function') {
+          callback(err);
+        }
       }
     } else {
       console.log(`Successfully ${isReconnect ? 're' : ''}connected to the memory-graph database`);
@@ -76,9 +84,9 @@ function connectToDatabase(isReconnect = false, callback = null) {
       // Configure the database connection
       db.configure('busyTimeout', 5000); // Wait up to 5 seconds when the database is locked
       
-      // Execute callback if provided
+      // Execute callback with success if provided
       if (callback && typeof callback === 'function') {
-        callback();
+        callback(null, { success: true });
       }
     }
   });
@@ -1150,14 +1158,217 @@ app.get('/api/db-status', (req, res) => {
       lastDatabaseModTime = currentModTime;
       
       // Reconnect to the database to ensure we have the latest data
-      connectToDatabase(true, () => {
-        console.log('Reconnected to the memory-graph database after external modification');
+      connectToDatabase(true, (err) => {
+        if (err) {
+          console.error('Error reconnecting to database after external modification:', err.message);
+        } else {
+          console.log('Reconnected to the memory-graph database after external modification');
+        }
       });
     }
     
     res.json({ changed: hasChanged });
   });
 });
+
+// API endpoint to get the current database path
+app.get('/api/db-path', (req, res) => {
+  console.log('==== [API] GET /api/db-path request received ====');
+  res.json({ path: DB_PATH });
+});
+
+// API endpoint to set a new database path
+app.post('/api/db-path', (req, res) => {
+  console.log('==== [API] POST /api/db-path request received ====');
+  console.log('[API] Request body:', JSON.stringify(req.body, null, 2));
+  
+  const { path } = req.body;
+  
+  if (!path) {
+    console.log('[API] POST /api/db-path error: Missing path parameter');
+    return res.status(400).json({ error: 'Missing path parameter' });
+  }
+  
+  // Add validation steps
+  validateDatabasePath(path)
+    .then(validationResult => {
+      console.log(`[API] Changing database path from ${DB_PATH} to ${path}`);
+      
+      // Close existing database connection
+      if (db) {
+        try {
+          db.close((err) => {
+            if (err) {
+              console.error('[API] Error closing existing database connection:', err.message);
+            }
+            
+            // Update path and reconnect
+            updateDatabasePath(path, res);
+          });
+        } catch (err) {
+          console.error('[API] Error closing database:', err.message);
+          // Continue with path update anyway
+          updateDatabasePath(path, res);
+        }
+      } else {
+        // No existing connection, just update the path
+        updateDatabasePath(path, res);
+      }
+    })
+    .catch(error => {
+      console.error('[API] Path validation error:', error.message);
+      return res.status(400).json({
+        error: error.message,
+        details: error.details
+      });
+    });
+});
+
+/**
+ * Validate the provided database path
+ * @param {string} path - The path to validate
+ * @returns {Promise} - Resolves if valid, rejects with error if invalid
+ */
+function validateDatabasePath(path) {
+  return new Promise((resolve, reject) => {
+    // Check if path is absolute
+    if (!path.startsWith('/')) {
+      return reject({
+        message: 'Database path must be absolute (start with /)',
+        details: 'Relative paths are not allowed'
+      });
+    }
+    
+    // Check if file exists and is readable
+    fs.access(path, fs.constants.F_OK | fs.constants.R_OK, (err) => {
+      if (err) {
+        if (err.code === 'ENOENT') {
+          return reject({
+            message: 'Database file not found',
+            details: `The file at ${path} does not exist`
+          });
+        } else if (err.code === 'EACCES') {
+          return reject({
+            message: 'Database file not accessible',
+            details: `The server does not have permission to read ${path}`
+          });
+        } else {
+          return reject({
+            message: 'Database file not accessible',
+            details: err.message
+          });
+        }
+      }
+      
+      // Check if file is a SQLite database
+      fs.stat(path, (statErr, stats) => {
+        if (statErr) {
+          return reject({
+            message: 'Error checking database file',
+            details: statErr.message
+          });
+        }
+        
+        // Check if it's a file (not a directory)
+        if (!stats.isFile()) {
+          return reject({
+            message: 'Path is not a file',
+            details: `${path} exists but is not a file`
+          });
+        }
+        
+        // Check file size (empty SQLite database is at least a few KB)
+        if (stats.size < 100) {
+          return reject({
+            message: 'File is too small to be a valid SQLite database',
+            details: `${path} may be empty or corrupted`
+          });
+        }
+        
+        // Basic SQLite header check
+        const fd = fs.openSync(path, 'r');
+        const buffer = Buffer.alloc(16);
+        
+        try {
+          fs.readSync(fd, buffer, 0, 16, 0);
+          fs.closeSync(fd);
+          
+          // Check for SQLite header
+          if (buffer.toString('utf8', 0, 6) !== 'SQLite') {
+            return reject({
+              message: 'File is not a valid SQLite database',
+              details: `${path} does not have a valid SQLite header`
+            });
+          }
+          
+          // All validation passed
+          resolve({
+            valid: true,
+            path: path
+          });
+        } catch (readErr) {
+          // Close file descriptor if still open
+          try {
+            fs.closeSync(fd);
+          } catch (e) {
+            // Ignore errors when closing
+          }
+          
+          return reject({
+            message: 'Error reading database file',
+            details: readErr.message
+          });
+        }
+      });
+    });
+  });
+}
+
+/**
+ * Helper function to update the database path and reconnect
+ * @param {string} newPath - The new database path
+ * @param {object} res - Express response object
+ */
+function updateDatabasePath(newPath, res) {
+  const oldPath = DB_PATH;
+  
+  // Update the global DB_PATH
+  global.DB_PATH = newPath;
+  
+  // Connect to the new database
+  connectToDatabase(true, (err) => {
+    if (err) {
+      console.error('[API] Error connecting to new database:', err.message);
+      
+      // Revert to old path if connection fails
+      global.DB_PATH = oldPath;
+      connectToDatabase(true);
+      
+      return res.status(500).json({ 
+        error: 'Failed to connect to the new database',
+        details: err.message
+      });
+    }
+    
+    console.log(`[API] Successfully switched to database at ${newPath}`);
+    
+    // Reset the last modification time
+    fs.stat(newPath, (err, stats) => {
+      if (!err) {
+        lastDatabaseModTime = stats.mtime.getTime();
+        console.log('[API] Updated last modification time for new database:', 
+          new Date(lastDatabaseModTime).toISOString());
+      }
+    });
+    
+    res.json({ 
+      success: true, 
+      oldPath, 
+      newPath,
+      message: 'Database path updated successfully'
+    });
+  });
+}
 
 // Start the server
 app.listen(PORT, () => {

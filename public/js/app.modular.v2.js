@@ -22,6 +22,29 @@ import {
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Memory Graph Visualizer - Initializing modular version');
   
+  // Initialize settings from localStorage first
+  Promise.all([
+    import('./modules-v2/utils/settingsManager.js'),
+    import('./modules-v2/ui/controls.js')
+  ]).then(([settingsManager, controls]) => {
+    // Load all settings and update store
+    settingsManager.loadAllSettings();
+    
+    // Set up listeners to save settings on change
+    settingsManager.setupSettingsEventListeners();
+    
+    // Load UI state and apply it
+    const uiState = settingsManager.loadUIState();
+    console.log('Loaded UI state from localStorage:', uiState);
+    
+    // Apply UI state after a short delay to ensure DOM is ready
+    setTimeout(() => {
+      if (uiState) {
+        controls.applyUIState(uiState);
+      }
+    }, 100);
+  });
+  
   // Initialize the menu bar
   menuBar.initMenuBar();
   menuBar.setupMenuStateListeners();
@@ -34,6 +57,23 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Initialize draggable windows
   windowManager.initializeDraggableWindows();
+  
+  // Initialize database path and history
+  import('./modules-v2/core/databaseService.js').then(databaseService => {
+    // Load path history from localStorage if available
+    databaseService.loadPathHistory();
+    
+    // Get current database path from server
+    databaseService.getDatabasePath()
+      .then(path => {
+        console.log('Current database path:', path);
+        // Add current path to history
+        databaseService.addToPathHistory(path);
+      })
+      .catch(error => {
+        console.error('Error getting database path:', error);
+      });
+  });
   
   // Initialize graph
   const graphInstance = graph.initGraph();

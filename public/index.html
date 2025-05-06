@@ -539,6 +539,175 @@
       padding-top: 40px;
       /* No padding needed on the sides since menu doesn't stretch full width */
     }
+    
+    /* File Dialog Styles */
+    .modal-dialog {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 2000;
+    }
+    
+    .dialog-content {
+      background-color: rgba(30, 30, 40, 0.95);
+      border-radius: 8px;
+      width: 500px;
+      max-width: 90%;
+      border: 1px solid rgba(100, 100, 255, 0.3);
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
+      overflow: hidden;
+    }
+    
+    .dialog-header {
+      padding: 15px;
+      border-bottom: 1px solid rgba(100, 100, 255, 0.3);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .dialog-header h3 {
+      margin: 0;
+      color: #aaccff;
+      font-size: 18px;
+    }
+    
+    .close-button {
+      background: none;
+      border: none;
+      color: #ff8888;
+      font-size: 24px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0;
+      margin: 0;
+    }
+    
+    .dialog-body {
+      padding: 20px;
+    }
+    
+    .form-group {
+      margin-bottom: 15px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      color: #ccddff;
+      font-size: 14px;
+    }
+    
+    .form-group input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      background-color: rgba(40, 40, 60, 0.7);
+      border: 1px solid rgba(100, 100, 255, 0.3);
+      color: #ffffff;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    
+    .form-info {
+      font-size: 13px;
+      color: #aaaaaa;
+      margin-top: 10px;
+    }
+    
+    .dialog-footer {
+      padding: 15px;
+      border-top: 1px solid rgba(100, 100, 255, 0.3);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    
+    .primary-button {
+      background-color: #4488cc;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    
+    .primary-button:hover {
+      background-color: #5599dd;
+    }
+    
+    .secondary-button {
+      background-color: rgba(40, 40, 60, 0.7);
+      color: white;
+      border: 1px solid rgba(100, 100, 255, 0.3);
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    
+    .secondary-button:hover {
+      background-color: rgba(50, 50, 80, 0.7);
+    }
+    
+    /* Database Path Dialog Styles */
+    .input-with-dropdown {
+      position: relative;
+      display: flex;
+    }
+    
+    .history-button {
+      position: absolute;
+      right: 0;
+      top: 0;
+      height: 100%;
+      background: transparent;
+      border: none;
+      color: #aaccff;
+      font-size: 16px;
+      cursor: pointer;
+      padding: 0 10px;
+    }
+    
+    .path-history-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 100%;
+      background-color: rgba(40, 40, 60, 0.95);
+      border: 1px solid rgba(100, 100, 255, 0.3);
+      border-radius: 0 0 4px 4px;
+      z-index: 2001;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    
+    .dropdown-header {
+      padding: 8px 12px;
+      font-size: 13px;
+      color: #aaccff;
+      border-bottom: 1px solid rgba(100, 100, 255, 0.3);
+      font-weight: bold;
+    }
+    
+    .history-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 14px;
+    }
+    
+    .history-item:hover {
+      background-color: rgba(70, 70, 100, 0.7);
+    }
   </style>
   
   <!-- Import libraries -->

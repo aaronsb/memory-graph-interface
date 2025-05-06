@@ -19,6 +19,11 @@ const initialState = {
   zoomOnSelect: false,
   showHelpCard: true,
 
+  // Data source settings
+  databasePath: '/default/database/path',
+  customDatabasePath: null,
+  databasePathHistory: [],
+  
   // Highlighting
   highlightNodes: new Set(),
   highlightLinks: new Set(),

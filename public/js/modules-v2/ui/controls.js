@@ -170,6 +170,83 @@ export function toggleMemoryDomainsPanel() {
 }
 
 /**
+ * Apply UI state from settings
+ * @param {Object} uiState - The UI state object to apply
+ */
+export function applyUIState(uiState) {
+  if (!uiState) return;
+  
+  console.log('Applying saved UI state:', uiState);
+  
+  // Apply view settings
+  if (uiState.bloomEnabled !== undefined) {
+    store.set('bloomEnabled', uiState.bloomEnabled);
+    // Apply bloom effect to renderer
+    const bloomPass = store.get('bloomPass');
+    if (bloomPass) {
+      if (uiState.bloomEnabled) {
+        bloomPass.strength = 0.8;
+        bloomPass.radius = 0.8;
+        bloomPass.threshold = 0.2;
+      } else {
+        bloomPass.strength = 0;
+      }
+    }
+  }
+  
+  if (uiState.showSummariesOnNodes !== undefined) {
+    store.set('showSummariesOnNodes', uiState.showSummariesOnNodes);
+  }
+  
+  if (uiState.showEdgeLabels !== undefined) {
+    store.set('showEdgeLabels', uiState.showEdgeLabels);
+  }
+  
+  if (uiState.zoomOnSelect !== undefined) {
+    store.set('zoomOnSelect', uiState.zoomOnSelect);
+  }
+  
+  if (uiState.showHelpCard !== undefined) {
+    store.set('showHelpCard', uiState.showHelpCard);
+    // Apply help card visibility
+    const helpCard = document.getElementById('help-card');
+    if (helpCard) {
+      helpCard.style.display = uiState.showHelpCard ? 'block' : 'none';
+    }
+  }
+  
+  // Apply panel visibility
+  if (uiState.infoPanelVisible !== undefined) {
+    const infoPanel = document.getElementById('info-panel');
+    if (infoPanel) {
+      infoPanel.style.display = uiState.infoPanelVisible ? 'block' : 'none';
+    }
+  }
+  
+  if (uiState.selectionPanelVisible !== undefined) {
+    const selectionPanel = document.getElementById('selection-panel');
+    if (selectionPanel) {
+      selectionPanel.style.display = uiState.selectionPanelVisible ? 'block' : 'none';
+    }
+  }
+  
+  if (uiState.domainLegendVisible !== undefined) {
+    const domainLegend = document.getElementById('domain-legend');
+    if (domainLegend) {
+      domainLegend.style.display = uiState.domainLegendVisible ? 'block' : 'none';
+    }
+  }
+  
+  // Refresh graph if needed
+  const graph = store.get('graph');
+  if (graph) {
+    graph.refresh();
+  }
+  
+  console.log('UI state applied successfully');
+}
+
+/**
  * Setup UI event listeners
  */
 export function setupUIEventListeners() {
@@ -191,6 +268,16 @@ export function setupUIEventListeners() {
     }
   });
   
+  // Set up window close handler to save UI state
+  window.addEventListener('beforeunload', () => {
+    // Import the settings manager dynamically to avoid circular dependencies
+    import('../utils/settingsManager.js').then(settingsManager => {
+      settingsManager.saveUIState();
+    }).catch(error => {
+      console.error('Error saving UI state:', error);
+    });
+  });
+  
   console.log('UI event listeners set up successfully');
 }
 
@@ -202,5 +289,6 @@ export default {
   toggleZoomOnSelect,
   toggleHelpCard,
   toggleMemoryDomainsPanel,
-  setupUIEventListeners
+  setupUIEventListeners,
+  applyUIState
 };

@@ -9,12 +9,15 @@ import * as graph from './core/graph.js';
 import * as nodeInteractions from './core/nodeInteractions.js';
 import * as linkManagement from './core/linkManagement.js';
 import * as domainManagement from './core/domainManagement.js';
+import * as databaseService from './core/databaseService.js';
 import * as controls from './ui/controls.js';
 import * as contextMenu from './ui/contextMenu.js';
 import * as windowManager from './ui/windowManager.js';
 import * as menuBar from './ui/menuBar.js';
+import * as fileDialog from './ui/fileDialog.js';
 import * as helpers from './utils/helpers.js';
 import * as eventBus from './utils/eventBus.js';
+import * as settingsManager from './utils/settingsManager.js';
 
 // Export for direct importing
 export {
@@ -23,12 +26,15 @@ export {
   nodeInteractions,
   linkManagement,
   domainManagement,
+  databaseService,
   controls,
   contextMenu,
   windowManager,
   menuBar,
+  fileDialog,
   helpers,
-  eventBus
+  eventBus,
+  settingsManager
 };
 
 // Default export for importing everything at once
@@ -38,10 +44,13 @@ export default {
   nodeInteractions,
   linkManagement,
   domainManagement,
+  databaseService,
   controls,
   contextMenu,
   windowManager,
   menuBar,
+  fileDialog,
   helpers,
-  eventBus
+  eventBus,
+  settingsManager
 };
