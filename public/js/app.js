@@ -13,6 +13,11 @@ let selectedHighlightLinks = new Set(); // Only links highlighted due to selecti
 let hoverHighlightNodes = new Set(); // Only nodes highlighted due to hover
 let hoverHighlightLinks = new Set(); // Only links highlighted due to hover
 
+// Multi-node selection variables (shift+click)
+let multiSelectActive = false; // Whether multi-select mode is active
+let multiSelectedNodes = []; // Array of nodes selected with shift+click
+let multiSelectHighlightNodes = new Set(); // Set of nodes highlighted due to multi-selection
+
 // Context menu variables
 let contextMenuActive = false;
 let contextMenuNode = null;
@@ -22,6 +27,11 @@ let contextMenuPosition = { x: 0, y: 0 };
 // Link creation mode state
 let linkCreationMode = false;
 let linkSourceNode = null;
+
+// Domain management
+let allDomains = []; // Array to store all available domains
+let currentDomainPage = 0; // Current page in domain pagination
+const DOMAINS_PER_PAGE = 10; // Number of domains to show per page
 let hoverNode = null;
 let hoverLink = null; // Track the link being hovered
 let selectedNode = null;
@@ -57,8 +67,9 @@ document.addEventListener('DOMContentLoaded', () => {
   hint.style.display = 'block'; // Ensure it's visible by default
   hint.innerHTML = `
     <strong>Memory Graph Interaction:</strong><br>
-    • <span style="color:#00ff00">Shift-click</span> two nodes to create a link between them<br>
+    • <span style="color:#00ff00">Alt-click</span> two nodes to create a link between them<br>
     • <span style="color:#ffff00">Drag</span> a node near another to auto-link them<br>
+    • <span style="color:#55dd55">Shift-click</span> nodes to add to multi-select panel<br>
     • <span style="color:#3388ff">Click</span> a node to select it and view details<br>
     • <span style="color:#ff5500">Hover</span> over nodes to see connections<br>
     • <span style="color:#ff00ff">Control-click</span> a link to delete it<br>
@@ -568,9 +579,9 @@ function initGraph() {
         return; // Exit early to prevent other click behaviors
       }
       
-      // Check if shift key is pressed for multi-selection
-      if (event.shiftKey) {
-        console.log('Shift-click detected on node:', node.id);
+      // Check if alt key is pressed for multi-selection
+      if (event.altKey) {
+        console.log('Alt-click detected on node:', node.id);
         
         // If node is already in selectedNodes, remove it
         const nodeIndex = selectedNodes.findIndex(n => n.id === node.id);
@@ -594,8 +605,12 @@ function initGraph() {
         // Update highlight to show selected nodes
         updateCombinedHighlights();
         updateHighlight();
+      } else if (event.shiftKey) {
+        // Shift+click behavior for multi-node selection
+        console.log('Shift-click detected on node:', node.id);
+        handleMultiSelectNode(node);
       } else {
-        // Regular click behavior (non-shift)
+        // Regular click behavior (non-alt, non-shift)
         handleViewNodeDetails(node);
       }
     })
@@ -1205,11 +1220,21 @@ function showNodeInfo(node) {
 
   // Show the panel
   infoPanel.style.display = 'block';
+  
+  // Update selection panel position if it's visible
+  if (multiSelectActive) {
+    updateSelectionPanelPosition();
+  }
 }
 
 // Hide the info panel
 function hideNodeInfo() {
   document.getElementById('info-panel').style.display = 'none';
+  
+  // Update selection panel position if it's visible
+  if (multiSelectActive) {
+    updateSelectionPanelPosition();
+  }
 }
 
 // Function to update combined highlight sets
@@ -1437,6 +1462,170 @@ function showContextMenu(x, y, node = null, link = null) {
   console.log(`Context menu shown for ${node ? 'node ' + node.id : (link ? 'link' : 'background')}`);
 }
 
+// Create a domain submenu with pagination
+function createDomainSubmenu(node) {
+  // Always make sure we have the most up-to-date domain list
+  collectAllDomains();
+  
+  // Create a submenu container
+  const submenu = document.createElement('div');
+  submenu.className = 'context-submenu';
+  
+  // Add a header showing current domain with its color
+  const header = document.createElement('div');
+  header.className = 'context-menu-header';
+  header.style.display = 'flex';
+  header.style.alignItems = 'center';
+  
+  // Get color for current domain
+  let currentDomainColor = '#cccccc'; // Default gray if not found
+  if (node.domain && window.domainColors && window.domainColors.has(node.domain)) {
+    currentDomainColor = window.domainColors.get(node.domain);
+  }
+  
+  // Create color square if node has a domain
+  if (node.domain) {
+    const colorSquare = document.createElement('span');
+    colorSquare.style.display = 'inline-block';
+    colorSquare.style.width = '12px';
+    colorSquare.style.height = '12px';
+    colorSquare.style.backgroundColor = currentDomainColor;
+    colorSquare.style.marginRight = '8px';
+    colorSquare.style.borderRadius = '3px';
+    header.appendChild(colorSquare);
+  }
+  
+  // Add text
+  const headerText = document.createElement('span');
+  headerText.textContent = `Current Domain: ${node.domain || 'None'}`;
+  header.appendChild(headerText);
+  
+  submenu.appendChild(header);
+  
+  // Get current page domains
+  const currentPageDomains = getCurrentPageDomains();
+  
+  // If no domains found
+  if (currentPageDomains.length === 0) {
+    const noDomainsItem = document.createElement('div');
+    noDomainsItem.className = 'context-menu-item';
+    noDomainsItem.textContent = 'No domains available';
+    noDomainsItem.style.fontStyle = 'italic';
+    noDomainsItem.style.opacity = '0.7';
+    submenu.appendChild(noDomainsItem);
+  } else {
+    // Add each domain as a menu item
+    currentPageDomains.forEach(domain => {
+      const domainItem = document.createElement('div');
+      domainItem.className = 'context-menu-item';
+      domainItem.style.display = 'flex';
+      domainItem.style.alignItems = 'center';
+      
+      // Get domain color from our palette
+      let domainColor = '#cccccc'; // Default gray if not found
+      if (window.domainColors && window.domainColors.has(domain)) {
+        domainColor = window.domainColors.get(domain);
+      } else if (window.domainColorPalette) {
+        // Assign a color if it doesn't exist yet
+        const colorIdx = window.colorIndex % window.domainColorPalette.length;
+        domainColor = window.domainColorPalette[colorIdx];
+        if (!window.domainColors) window.domainColors = new Map();
+        window.domainColors.set(domain, domainColor);
+        window.colorIndex = (window.colorIndex + 1) % window.domainColorPalette.length;
+      }
+      
+      // Create color square
+      const colorSquare = document.createElement('span');
+      colorSquare.style.display = 'inline-block';
+      colorSquare.style.width = '12px';
+      colorSquare.style.height = '12px';
+      colorSquare.style.backgroundColor = domainColor;
+      colorSquare.style.marginRight = '8px';
+      colorSquare.style.borderRadius = '3px';
+      domainItem.appendChild(colorSquare);
+      
+      // Add domain text
+      const domainText = document.createElement('span');
+      domainText.style.flexGrow = '1';
+      
+      // Mark the current domain
+      if (domain === node.domain) {
+        domainText.innerHTML = `${domain} <span style="margin-left: 6px; color: #55ff55;">✓</span>`;
+        domainText.style.fontWeight = 'bold';
+      } else {
+        domainText.textContent = domain;
+      }
+      domainItem.appendChild(domainText);
+      
+      // Handle click to change domain
+      domainItem.addEventListener('click', () => {
+        handleChangeDomain(node, domain);
+        hideContextMenu();
+      });
+      
+      submenu.appendChild(domainItem);
+    });
+  }
+  
+  // Add pagination controls if there are more domains than fit on one page
+  if (allDomains.length > DOMAINS_PER_PAGE) {
+    // Add a separator
+    const separator = document.createElement('div');
+    separator.className = 'context-menu-separator';
+    submenu.appendChild(separator);
+    
+    // Add pagination info
+    const paginationInfo = document.createElement('div');
+    paginationInfo.className = 'pagination-info';
+    paginationInfo.textContent = getDomainPaginationInfo();
+    submenu.appendChild(paginationInfo);
+    
+    // Add pagination controls container
+    const paginationControls = document.createElement('div');
+    paginationControls.className = 'submenu-pagination';
+    
+    // Add previous button
+    const prevButton = document.createElement('button');
+    prevButton.className = 'pagination-button';
+    prevButton.textContent = '« Previous';
+    prevButton.disabled = currentDomainPage === 0;
+    prevButton.addEventListener('click', (event) => {
+      // This stops the click from bubbling up and closing the context menu
+      event.stopPropagation();
+      if (prevDomainPage()) {
+        // Replace the current submenu with a new one
+        const parentItem = submenu.parentNode;
+        submenu.remove();
+        const newSubMenu = createDomainSubmenu(node);
+        parentItem.appendChild(newSubMenu);
+      }
+    });
+    paginationControls.appendChild(prevButton);
+    
+    // Add next button
+    const nextButton = document.createElement('button');
+    nextButton.className = 'pagination-button';
+    nextButton.textContent = 'Next »';
+    nextButton.disabled = currentDomainPage >= Math.ceil(allDomains.length / DOMAINS_PER_PAGE) - 1;
+    nextButton.addEventListener('click', (event) => {
+      // This stops the click from bubbling up and closing the context menu
+      event.stopPropagation();
+      if (nextDomainPage()) {
+        // Replace the current submenu with a new one
+        const parentItem = submenu.parentNode;
+        submenu.remove();
+        const newSubMenu = createDomainSubmenu(node);
+        parentItem.appendChild(newSubMenu);
+      }
+    });
+    paginationControls.appendChild(nextButton);
+    
+    submenu.appendChild(paginationControls);
+  }
+  
+  return submenu;
+}
+
 // Populate the context menu with items based on what was right-clicked
 function populateContextMenu(contextMenu, node, link) {
   // Different menu items depending on what was clicked
@@ -1466,6 +1655,14 @@ function populateContextMenu(contextMenu, node, link) {
       hideContextMenu();
     });
     contextMenu.appendChild(createLinkItem);
+    
+    // Add Change Domain submenu
+    const changeDomainItem = document.createElement('div');
+    changeDomainItem.className = 'context-menu-item has-submenu';
+    changeDomainItem.textContent = 'Change Domain';
+    const domainSubmenu = createDomainSubmenu(node);
+    changeDomainItem.appendChild(domainSubmenu);
+    contextMenu.appendChild(changeDomainItem);
     
     // Add Tags
     const addTagsItem = document.createElement('div');
@@ -1811,6 +2008,53 @@ function toggleLinkCreationMode(sourceNode = null) {
   }
 }
 
+// Handle changing a node's domain
+function handleChangeDomain(node, newDomain) {
+  if (!node || !newDomain) {
+    console.warn('Invalid domain change attempt - missing node or domain');
+    return;
+  }
+  
+  // No change needed if the domain is the same
+  if (node.domain === newDomain) {
+    console.log('Node is already in domain:', newDomain);
+    return;
+  }
+  
+  console.log(`Changing node ${node.id} domain from ${node.domain} to ${newDomain}`);
+  
+  // Prepare the request payload
+  const payload = {
+    nodeId: node.id,
+    domain: newDomain
+  };
+  
+  // Send request to update domain
+  fetch('/api/nodes/update-domain', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(res => {
+    console.log('[API] Received response for POST /api/nodes/update-domain', res);
+    return res.json();
+  })
+  .then(result => {
+    console.log('[API] Response JSON for update domain:', result);
+    if (result.success) {
+      // Clear any selection and reload data with position preservation
+      loadData(true);
+      console.log('Domain updated successfully');
+    } else {
+      alert('Failed to update domain: ' + (result.error || 'Unknown error'));
+    }
+  })
+  .catch(err => {
+    console.error('[API] Error updating domain:', err);
+    alert('Error updating domain: ' + err);
+  });
+}
+
 // Handle creating a link between two nodes
 function handleCreateLink(source, target) {
   if (!source || !target || source.id === target.id) {
@@ -1949,6 +2193,63 @@ function toggleDatabaseWatcher() {
   }
 }
 
+// Get all available domains from nodes
+function collectAllDomains() {
+  // Start by collecting domains from the graph data
+  const domainSet = new Set();
+  
+  // Add domains from graph nodes
+  if (graphData && graphData.nodes) {
+    graphData.nodes.forEach(node => {
+      if (node.domain) {
+        domainSet.add(node.domain);
+      }
+    });
+  }
+  
+  // Convert to sorted array
+  allDomains = Array.from(domainSet).sort();
+  console.log(`Collected ${allDomains.length} domains from graph data`);
+  
+  // Reset to first page when domain list changes
+  currentDomainPage = 0;
+  
+  return allDomains;
+}
+
+// Get domains for the current pagination page
+function getCurrentPageDomains() {
+  const startIndex = currentDomainPage * DOMAINS_PER_PAGE;
+  return allDomains.slice(startIndex, startIndex + DOMAINS_PER_PAGE);
+}
+
+// Navigate to the next page of domains
+function nextDomainPage() {
+  const maxPage = Math.ceil(allDomains.length / DOMAINS_PER_PAGE) - 1;
+  if (currentDomainPage < maxPage) {
+    currentDomainPage++;
+    return true;
+  }
+  return false;
+}
+
+// Navigate to the previous page of domains
+function prevDomainPage() {
+  if (currentDomainPage > 0) {
+    currentDomainPage--;
+    return true;
+  }
+  return false;
+}
+
+// Get current pagination info text
+function getDomainPaginationInfo() {
+  const totalPages = Math.ceil(allDomains.length / DOMAINS_PER_PAGE);
+  const startItem = currentDomainPage * DOMAINS_PER_PAGE + 1;
+  const endItem = Math.min((currentDomainPage + 1) * DOMAINS_PER_PAGE, allDomains.length);
+  return `${startItem}-${endItem} of ${allDomains.length} domains (Page ${currentDomainPage + 1}/${totalPages})`;
+}
+
 // Update the domain color legend in the UI
 function updateDomainColorLegend() {
   const legendContainer = document.getElementById('domain-colors-list');
@@ -1965,6 +2266,9 @@ function updateDomainColorLegend() {
   
   // Sort domains alphabetically for consistent display
   const domains = Array.from(window.domainColors.keys()).sort();
+  
+  // Also update our allDomains array while we're at it
+  allDomains = domains;
   
   // Create a legend item for each domain
   domains.forEach(domain => {
@@ -2031,4 +2335,350 @@ function showCustomConfirmDialog(message, yesCallback) {
   
   // Show the dialog
   dialog.style.display = 'block';
+}
+
+// ================= Multi-node Selection Functions =================
+
+// Update the position of the selection panel based on info panel visibility
+function updateSelectionPanelPosition() {
+  const infoPanel = document.getElementById('info-panel');
+  const selectionPanel = document.getElementById('selection-panel');
+  
+  if (!selectionPanel) return;
+  
+  // Check if info panel is visible
+  const infoPanelVisible = infoPanel && infoPanel.style.display === 'block';
+  
+  // Position selection panel based on info panel visibility
+  if (infoPanelVisible) {
+    // Move selection panel to the left of the info panel
+    selectionPanel.style.right = '420px'; // Position to the left of the info panel
+  } else {
+    // Position selection panel at the far right (same position as info panel would be)
+    selectionPanel.style.right = '10px';
+  }
+}
+
+// Handle shift+click selection of a node
+function handleMultiSelectNode(node) {
+  if (!node) return;
+  
+  // Toggle multi-select mode
+  if (!multiSelectActive) {
+    multiSelectActive = true;
+    multiSelectedNodes = []; // Reset the selection
+    multiSelectHighlightNodes.clear();
+    showSelectionPanel(); // Show the panel when first node is selected
+  }
+  
+  // Check if node is already in the selection list
+  const existingIndex = multiSelectedNodes.findIndex(n => n.id === node.id);
+  
+  if (existingIndex !== -1) {
+    // Remove the node if it's already selected
+    multiSelectedNodes.splice(existingIndex, 1);
+    multiSelectHighlightNodes.delete(node);
+    console.log('Node removed from multi-selection:', node.id);
+  } else {
+    // Add the node to the selection
+    multiSelectedNodes.push(node);
+    multiSelectHighlightNodes.add(node);
+    console.log('Node added to multi-selection:', node.id);
+  }
+  
+  // Update the visual highlights
+  updateCombinedHighlights();
+  updateHighlight();
+  
+  // Update the selection panel
+  updateSelectionPanel();
+}
+
+// Show the multi-selection panel
+function showSelectionPanel() {
+  const selectionPanel = document.getElementById('selection-panel');
+  if (!selectionPanel) return;
+  
+  // Show selection panel
+  selectionPanel.style.display = 'block';
+  
+  // Position the panel properly based on info panel visibility
+  updateSelectionPanelPosition();
+  
+  // Setup event listeners for the panel buttons if first time
+  setupSelectionPanelListeners();
+  
+  // Update the panel contents
+  updateSelectionPanel();
+}
+
+// Hide the multi-selection panel
+function hideSelectionPanel() {
+  const selectionPanel = document.getElementById('selection-panel');
+  if (!selectionPanel) return;
+  
+  selectionPanel.style.display = 'none';
+  
+  // Clear the selection
+  multiSelectActive = false;
+  multiSelectedNodes = [];
+  multiSelectHighlightNodes.clear();
+  
+  // Update highlights
+  updateCombinedHighlights();
+  updateHighlight();
+}
+
+// Set up listeners for the selection panel
+function setupSelectionPanelListeners() {
+  // Add listener for close button
+  const closeButton = document.getElementById('selection-close');
+  if (closeButton) {
+    closeButton.addEventListener('click', hideSelectionPanel);
+  }
+  
+  // Add listener for clear selection button
+  const clearButton = document.getElementById('clear-selection-btn');
+  if (clearButton) {
+    clearButton.addEventListener('click', () => {
+      multiSelectedNodes = [];
+      multiSelectHighlightNodes.clear();
+      updateCombinedHighlights();
+      updateHighlight();
+      updateSelectionPanel();
+    });
+  }
+  
+  // Add listener for link all button
+  const linkButton = document.getElementById('link-selected-btn');
+  if (linkButton) {
+    linkButton.addEventListener('click', handleLinkAllSelected);
+  }
+  
+  // Add listener for copy button
+  const copyButton = document.getElementById('selection-copy');
+  if (copyButton) {
+    copyButton.addEventListener('click', () => {
+      if (multiSelectedNodes.length === 0) return;
+      
+      // Prepare content to copy
+      const content = multiSelectedNodes.map(node => {
+        return `Node ID: ${node.id}\nDomain: ${node.domain || 'None'}\nContent: ${node.content_summary || node.content.substring(0, 100) + '...'}\n`;
+      }).join('\n---\n\n');
+      
+      // Copy to clipboard
+      navigator.clipboard.writeText(content)
+        .then(() => {
+          // Visual feedback
+          copyButton.textContent = '✓';
+          copyButton.style.color = '#00ff00';
+          
+          // Reset after delay
+          setTimeout(() => {
+            copyButton.textContent = '📋';
+            copyButton.style.color = '';
+          }, 1500);
+        })
+        .catch(err => {
+          console.error('Failed to copy content:', err);
+          alert('Failed to copy content to clipboard');
+        });
+    });
+  }
+}
+
+// Update the selection panel with current selected nodes
+function updateSelectionPanel() {
+  const selectionList = document.getElementById('selection-list');
+  const selectionCount = document.getElementById('selection-count');
+  
+  if (!selectionList || !selectionCount) return;
+  
+  // Update count
+  selectionCount.textContent = multiSelectedNodes.length.toString();
+  
+  // Clear the current list
+  selectionList.innerHTML = '';
+  
+  // If no nodes selected, show a message
+  if (multiSelectedNodes.length === 0) {
+    const emptyMessage = document.createElement('div');
+    emptyMessage.className = 'selection-empty-message';
+    emptyMessage.textContent = 'No nodes selected. Use Shift+click to select nodes.';
+    emptyMessage.style.fontStyle = 'italic';
+    emptyMessage.style.opacity = '0.7';
+    emptyMessage.style.textAlign = 'center';
+    emptyMessage.style.padding = '10px';
+    selectionList.appendChild(emptyMessage);
+    return;
+  }
+  
+  // Add each selected node to the list
+  multiSelectedNodes.forEach(node => {
+    const item = document.createElement('div');
+    item.className = 'selection-item';
+    
+    // Get node color from domain
+    let nodeColor = '#cccccc';
+    if (node.domain && window.domainColors && window.domainColors.has(node.domain)) {
+      nodeColor = window.domainColors.get(node.domain);
+    }
+    
+    // Create color indicator
+    const colorIndicator = document.createElement('span');
+    colorIndicator.style.width = '12px';
+    colorIndicator.style.height = '12px';
+    colorIndicator.style.borderRadius = '50%';
+    colorIndicator.style.backgroundColor = nodeColor;
+    colorIndicator.style.display = 'inline-block';
+    colorIndicator.style.marginRight = '8px';
+    
+    // Add text content (truncated)
+    const textContent = document.createElement('span');
+    textContent.className = 'selection-item-text';
+    textContent.title = node.content_summary || node.content;
+    
+    // Limit text to a reasonable length
+    const displayText = node.content_summary || node.content;
+    textContent.textContent = displayText.length > 60 ? 
+      displayText.substring(0, 60) + '...' : displayText;
+    
+    // Add remove button
+    const removeBtn = document.createElement('span');
+    removeBtn.className = 'selection-item-remove';
+    removeBtn.textContent = '✖';
+    removeBtn.title = 'Remove from selection';
+    removeBtn.addEventListener('click', event => {
+      // Stop propagation to prevent other handlers
+      event.stopPropagation();
+      
+      // Remove the node from selection
+      handleMultiSelectNode(node);
+    });
+    
+    // Add everything to the item
+    item.appendChild(colorIndicator);
+    item.appendChild(textContent);
+    item.appendChild(removeBtn);
+    
+    // Handle click on the item to show node details
+    item.addEventListener('click', () => {
+      // Show details in the regular info panel without changing selection
+      showNodeInfo(node);
+    });
+    
+    // Add the item to the list
+    selectionList.appendChild(item);
+  });
+  
+  // Update the link button state
+  const linkButton = document.getElementById('link-selected-btn');
+  if (linkButton) {
+    linkButton.disabled = multiSelectedNodes.length < 2;
+    linkButton.title = multiSelectedNodes.length < 2 ? 
+      'Select at least 2 nodes to link' : 'Create links between all selected nodes';
+  }
+}
+
+// Handle creating links between all selected nodes
+function handleLinkAllSelected() {
+  if (multiSelectedNodes.length < 2) {
+    alert('Select at least 2 nodes to create links');
+    return;
+  }
+  
+  showCustomConfirmDialog(
+    `Are you sure you want to create links between all ${multiSelectedNodes.length} selected nodes? This will create ${(multiSelectedNodes.length * (multiSelectedNodes.length - 1)) / 2} links.`,
+    () => {
+      // Create all possible links between the selected nodes
+      let linkCreationPromises = [];
+      
+      // For each pair of nodes
+      for (let i = 0; i < multiSelectedNodes.length; i++) {
+        for (let j = i + 1; j < multiSelectedNodes.length; j++) {
+          const source = multiSelectedNodes[i];
+          const target = multiSelectedNodes[j];
+          
+          // Add a promise to create this link
+          linkCreationPromises.push(
+            createLinkPromise(source, target)
+          );
+        }
+      }
+      
+      // Process all the link creation promises
+      Promise.all(linkCreationPromises)
+        .then(results => {
+          const successCount = results.filter(r => r.success).length;
+          const failCount = results.length - successCount;
+          
+          alert(`Created ${successCount} links. ${failCount > 0 ? `${failCount} links already existed or failed.` : ''}`);
+          
+          // Reload the graph data
+          loadData(true);
+        })
+        .catch(err => {
+          console.error('Error creating multiple links:', err);
+          alert('Error creating links: ' + err);
+        });
+    }
+  );
+}
+
+// Create a promise for link creation to allow bulk operations
+function createLinkPromise(source, target) {
+  return new Promise((resolve, reject) => {
+    // Skip if source and target are the same
+    if (source.id === target.id) {
+      resolve({ success: false, error: 'Cannot link node to itself' });
+      return;
+    }
+    
+    // Create link payload
+    const linkPayload = {
+      source: source.id,
+      target: target.id,
+      type: 'relates_to',
+      strength: 0.7,
+      domain: source.domain || target.domain
+    };
+    
+    // Send the API request
+    fetch('/api/edges', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(linkPayload)
+    })
+    .then(res => res.json())
+    .then(result => {
+      if (result.success) {
+        resolve({ success: true, id: result.id });
+      } else if (result.error && result.error.includes('Edge already exists')) {
+        resolve({ success: false, error: 'Edge already exists' });
+      } else {
+        resolve({ success: false, error: result.error || 'Unknown error' });
+      }
+    })
+    .catch(err => {
+      resolve({ success: false, error: err.toString() });
+    });
+  });
+}
+
+// Update the combined highlight sets to include multi-selection highlights
+function updateCombinedHighlights() {
+  // Clear combined sets
+  highlightNodes.clear();
+  highlightLinks.clear();
+  
+  // Add all selected highlights first
+  selectedHighlightNodes.forEach(node => highlightNodes.add(node));
+  selectedHighlightLinks.forEach(link => highlightLinks.add(link));
+  
+  // Then add hover highlights
+  hoverHighlightNodes.forEach(node => highlightNodes.add(node));
+  hoverHighlightLinks.forEach(link => highlightLinks.add(link));
+  
+  // Add multi-select highlights last
+  multiSelectHighlightNodes.forEach(node => highlightNodes.add(node));
 }
