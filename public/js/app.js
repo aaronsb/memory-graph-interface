@@ -2,11 +2,15 @@
 let graph;
 let bloomPass;
 let bloomEnabled = true;
-let showSummariesOnNodes = false; // Track if summaries should be shown on nodes
-let showEdgeLabels = true; // Track if edge labels should be shown
-let zoomOnSelect = true; // Track if camera should zoom to selected node
-let highlightNodes = new Set();
-let highlightLinks = new Set();
+let showSummariesOnNodes = true; // Track if summaries should be shown on nodes (ON by default)
+let showEdgeLabels = false; // Track if edge labels should be shown (OFF by default)
+let zoomOnSelect = false; // Track if camera should zoom to selected node (OFF by default)
+let highlightNodes = new Set(); // Combined set of highlighted nodes
+let highlightLinks = new Set(); // Combined set of highlighted links
+let selectedHighlightNodes = new Set(); // Only nodes highlighted due to selection
+let selectedHighlightLinks = new Set(); // Only links highlighted due to selection
+let hoverHighlightNodes = new Set(); // Only nodes highlighted due to hover
+let hoverHighlightLinks = new Set(); // Only links highlighted due to hover
 let hoverNode = null;
 let hoverLink = null; // Track the link being hovered
 let selectedNode = null;
@@ -21,6 +25,7 @@ let controlKeyPressed = false; // Track if Control key is pressed
 let mouseButtonPressed = false; // Track if mouse button is pressed
 let dbWatcherActive = true; // Track if database file watcher is active
 let dbWatcherInterval = null; // Store the interval ID for database checking
+
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
@@ -143,16 +148,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Add a toggle button for showing summaries on nodes
   const summariesToggle = document.createElement('button');
   summariesToggle.id = 'toggle-summaries';
-  summariesToggle.textContent = 'Node Summaries: OFF';
-  styleButton(summariesToggle, false);
+  summariesToggle.textContent = 'Node Summaries: ON';
+  styleButton(summariesToggle, true);  // ON by default
   summariesToggle.addEventListener('click', toggleSummariesOnNodes);
   controls.appendChild(summariesToggle);
   
   // Add a toggle button for showing edge labels
   const edgeLabelsToggle = document.createElement('button');
   edgeLabelsToggle.id = 'toggle-edge-labels';
-  edgeLabelsToggle.textContent = 'Edge Labels: ON';
-  styleButton(edgeLabelsToggle, true);
+  edgeLabelsToggle.textContent = 'Edge Labels: OFF';
+  styleButton(edgeLabelsToggle, false);  // OFF by default
   edgeLabelsToggle.addEventListener('click', toggleEdgeLabels);
   controls.appendChild(edgeLabelsToggle);
   
@@ -167,8 +172,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Add a toggle button for zoom on select
   const zoomToggle = document.createElement('button');
   zoomToggle.id = 'toggle-zoom';
-  zoomToggle.textContent = 'Zoom on Select: ON';
-  styleButton(zoomToggle, true);
+  zoomToggle.textContent = 'Zoom on Select: OFF';
+  styleButton(zoomToggle, false);  // OFF by default
   zoomToggle.addEventListener('click', toggleZoomOnSelect);
   controls.appendChild(zoomToggle);
   
@@ -210,6 +215,10 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('keydown', (event) => {
     if (event.key === 'Control') {
       controlKeyPressed = true;
+      // Clear hover highlights but keep selection highlights
+      hoverHighlightNodes.clear();
+      hoverHighlightLinks.clear();
+      updateCombinedHighlights();
       updateHighlight();
     }
   });
@@ -217,6 +226,10 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('keyup', (event) => {
     if (event.key === 'Control') {
       controlKeyPressed = false;
+      // Clear hover highlights but keep selection highlights
+      hoverHighlightNodes.clear();
+      hoverHighlightLinks.clear();
+      updateCombinedHighlights();
       updateHighlight();
     }
   });
@@ -234,6 +247,10 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('blur', () => {
     controlKeyPressed = false;
     mouseButtonPressed = false;
+    // Clear hover highlights but keep selection highlights
+    hoverHighlightNodes.clear();
+    hoverHighlightLinks.clear();
+    updateCombinedHighlights();
     updateHighlight();
   });
 });
@@ -371,7 +388,7 @@ function initGraph() {
     })
     .onNodeHover(node => {
       // Handle node hover
-      if ((!node && !highlightNodes.size) || (node && hoverNode === node)) return;
+      if ((node && hoverNode === node)) return;
       
       // If control key is pressed, we're in link deletion mode, so don't highlight nodes
       if (controlKeyPressed) {
@@ -379,17 +396,22 @@ function initGraph() {
         return;
       }
       
-      highlightNodes.clear();
-      highlightLinks.clear();
+      // Always clear hover highlights
+      hoverHighlightNodes.clear();
+      hoverHighlightLinks.clear();
       
       if (node) {
-        highlightNodes.add(node);
+        // Add hover node to hover highlight set
+        hoverHighlightNodes.add(node);
         
-        // Highlight connected nodes and links
+        // Add connected nodes and links to hover highlight set
         graphData.links.forEach(link => {
-          if (link.source.id === node.id || link.target.id === node.id) {
-            highlightLinks.add(link);
-            highlightNodes.add(link.source.id === node.id ? link.target : link.source);
+          const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+          const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+          
+          if (sourceId === node.id || targetId === node.id) {
+            hoverHighlightLinks.add(link);
+            hoverHighlightNodes.add(sourceId === node.id ? link.target : link.source);
           }
         });
         
@@ -405,18 +427,27 @@ function initGraph() {
       }
       
       hoverNode = node || null;
+      
+      // Update combined highlight sets
+      updateCombinedHighlights();
+      // Update the visualization
       updateHighlight();
     })
     .onLinkHover(link => {
       // Only highlight links when Control key is pressed
       if (controlKeyPressed) {
-        highlightLinks.clear();
+        // Clear hover link highlights first
+        hoverHighlightLinks.clear();
         
+        // Add the hovered link to hover highlights
         if (link) {
-          highlightLinks.add(link);
+          hoverHighlightLinks.add(link);
         }
         
         hoverLink = link || null;
+        
+        // Update combined highlights and visualization
+        updateCombinedHighlights();
         updateHighlight();
       }
     })
@@ -447,6 +478,10 @@ function initGraph() {
                 if (selectedNode && selectedNode.id === node.id) {
                   selectedNode = null;
                   hideNodeInfo();
+                  // Clear selection highlights
+                  selectedHighlightNodes.clear();
+                  selectedHighlightLinks.clear();
+                  updateCombinedHighlights();
                 }
                 
                 // Remove the node from selectedNodes if it's there
@@ -529,6 +564,7 @@ function initGraph() {
         }
         
         // Update highlight to show selected nodes
+        updateCombinedHighlights();
         updateHighlight();
       } else {
         // Regular click behavior (non-shift)
@@ -536,10 +572,35 @@ function initGraph() {
           // Deselect if already selected
           selectedNode = null;
           hideNodeInfo();
+          // Clear all selection highlights
+          selectedHighlightNodes.clear();
+          selectedHighlightLinks.clear();
         } else {
+          // Clear previous selection highlights if selecting a new node
+          selectedHighlightNodes.clear();
+          selectedHighlightLinks.clear();
+          
           selectedNode = node;
+          
+          // Add the selected node to selection highlights
+          selectedHighlightNodes.add(node);
+          
+          // Add connected nodes and links to selection highlights
+          graphData.links.forEach(link => {
+            const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+            const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+            
+            if (sourceId === node.id || targetId === node.id) {
+              selectedHighlightLinks.add(link);
+              selectedHighlightNodes.add(sourceId === node.id ? link.target : link.source);
+            }
+          });
+          
           showNodeInfo(node);
         }
+        
+        // Update the combined highlight sets
+        updateCombinedHighlights();
         updateHighlight();
 
         // Center view on node only if zoom on select is enabled
@@ -1012,12 +1073,13 @@ function getNodeColor(node) {
     return '#00ff00'; // Bright green for selection
   }
   
-  // Highlight if selected (persistent)
-  if (selectedNode && node.id === selectedNode.id) {
-    return '#3388ff'; // Blue for selected node
-  }
-  
+  // Check if node is highlighted (this includes both hover and selection highlights)
   if (highlightNodes.has(node)) {
+    // If this is the selected node, use a deeper tone of the hover color (like the hovered node)
+    if (selectedNode && node.id === selectedNode.id) {
+      return '#ff5500'; // Use the deeper orange tone that the hovered node uses
+    }
+    // For hovered node use deeper tone, for related nodes use lighter tone
     return node === hoverNode ? '#ff5500' : '#ff8800';
   }
   
@@ -1215,8 +1277,24 @@ function hideNodeInfo() {
   document.getElementById('info-panel').style.display = 'none';
 }
 
+// Function to update combined highlight sets
+function updateCombinedHighlights() {
+  // Clear combined sets
+  highlightNodes.clear();
+  highlightLinks.clear();
+  
+  // Add all selected highlights first
+  selectedHighlightNodes.forEach(node => highlightNodes.add(node));
+  selectedHighlightLinks.forEach(link => highlightLinks.add(link));
+  
+  // Then add hover highlights
+  hoverHighlightNodes.forEach(node => highlightNodes.add(node));
+  hoverHighlightLinks.forEach(link => highlightLinks.add(link));
+}
+
 // Update highlighted nodes and links
 function updateHighlight() {
+  
   // Create a temporary virtual link between dragged node and potential target
   let virtualLinks = [];
   if (draggedNode && potentialLinkTarget) {
