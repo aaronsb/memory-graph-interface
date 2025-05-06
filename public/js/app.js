@@ -74,71 +74,88 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('refresh-btn').addEventListener('click', loadData);
   document.getElementById('toggle-bloom').addEventListener('click', toggleBloomEffect);
   
-  // Create a controls container with better layout
+  // Create a controls container with vertical layout
   const controls = document.getElementById('controls');
   
   // Create a flex container for the buttons
   controls.style.display = 'flex';
   controls.style.flexDirection = 'column';
-  controls.style.gap = '8px';
+  controls.style.gap = '6px'; // Slightly reduced gap for tighter layout
   controls.style.zIndex = 1001; // Higher z-index than the hint
   controls.style.position = 'absolute';
-  controls.style.bottom = '180px'; // Position above the hint
+  controls.style.top = '10px'; // Position at top-left instead of bottom
   controls.style.left = '10px';
-  controls.style.width = '400px'; // Match width with hint
+  controls.style.width = '200px'; // Reduced width for vertical layout
+  controls.style.padding = '10px';
+  controls.style.backgroundColor = 'rgba(0,0,0,0.4)'; // Semi-transparent background
+  controls.style.borderRadius = '6px';
   
-  // Create a row for the main controls
-  const mainControls = document.createElement('div');
-  mainControls.style.display = 'flex';
-  mainControls.style.gap = '8px';
-  controls.appendChild(mainControls);
+  // Unified button styling function
+  const styleButton = (button, isOn) => {
+    button.style.padding = '8px 12px';
+    button.style.borderRadius = '4px';
+    button.style.border = 'none';
+    button.style.width = '100%';
+    button.style.textAlign = 'left';
+    button.style.cursor = 'pointer';
+    button.style.fontWeight = '500';
+    button.style.backgroundColor = isOn ? '#3388ff' : '#525252'; // Blue for on, gray for off
+    button.style.color = 'white';
+  };
   
-  // Move existing buttons to the main controls row
-  mainControls.appendChild(document.getElementById('refresh-btn'));
-  mainControls.appendChild(document.getElementById('toggle-bloom'));
+  // Add refresh button
+  const refreshBtn = document.getElementById('refresh-btn');
+  styleButton(refreshBtn, true);
+  controls.appendChild(refreshBtn);
+  
+  // Add toggle button for bloom effect
+  const bloomToggle = document.getElementById('toggle-bloom');
+  styleButton(bloomToggle, true);
+  controls.appendChild(bloomToggle);
   
   // Add a toggle button for database file watching
   const watcherToggle = document.createElement('button');
   watcherToggle.id = 'toggle-watcher';
   watcherToggle.textContent = 'DB Watcher: ON';
-  watcherToggle.style.backgroundColor = '#2a9852'; // Green background
+  styleButton(watcherToggle, true);
   watcherToggle.addEventListener('click', toggleDatabaseWatcher);
-  mainControls.appendChild(watcherToggle);
+  controls.appendChild(watcherToggle);
   
   // Add a toggle button for showing summaries on nodes
   const summariesToggle = document.createElement('button');
   summariesToggle.id = 'toggle-summaries';
-  summariesToggle.textContent = 'Summaries on Nodes: OFF';
-  summariesToggle.style.backgroundColor = '#525252'; // Gray background when off
+  summariesToggle.textContent = 'Node Summaries: OFF';
+  styleButton(summariesToggle, false);
   summariesToggle.addEventListener('click', toggleSummariesOnNodes);
-  mainControls.appendChild(summariesToggle);
+  controls.appendChild(summariesToggle);
   
   // Add a toggle button for showing edge labels
   const edgeLabelsToggle = document.createElement('button');
   edgeLabelsToggle.id = 'toggle-edge-labels';
   edgeLabelsToggle.textContent = 'Edge Labels: ON';
-  edgeLabelsToggle.style.backgroundColor = '#2a9852'; // Green background when on
+  styleButton(edgeLabelsToggle, true);
   edgeLabelsToggle.addEventListener('click', toggleEdgeLabels);
-  mainControls.appendChild(edgeLabelsToggle);
+  controls.appendChild(edgeLabelsToggle);
   
   // Add a toggle button for domain legend
   const domainLegendToggle = document.createElement('button');
   domainLegendToggle.id = 'toggle-domain-legend';
   domainLegendToggle.textContent = 'Domain Legend: ON';
-  domainLegendToggle.style.backgroundColor = '#2a9852'; // Green background when on
+  styleButton(domainLegendToggle, true);
   domainLegendToggle.addEventListener('click', toggleDomainLegend);
-  mainControls.appendChild(domainLegendToggle);
+  controls.appendChild(domainLegendToggle);
   
   // Add a database update indicator
   const dbUpdateIndicator = document.createElement('div');
   dbUpdateIndicator.id = 'db-update-indicator';
   dbUpdateIndicator.textContent = 'DB Updated';
-  dbUpdateIndicator.style.backgroundColor = 'rgba(40, 167, 69, 0.6)';
+  dbUpdateIndicator.style.backgroundColor = 'rgba(51, 136, 255, 0.7)'; // Match blue toggle color
   dbUpdateIndicator.style.color = 'white';
   dbUpdateIndicator.style.padding = '8px 12px';
   dbUpdateIndicator.style.borderRadius = '4px';
-  dbUpdateIndicator.style.marginTop = '8px';
+  dbUpdateIndicator.style.marginTop = '12px';
   dbUpdateIndicator.style.textAlign = 'center';
+  dbUpdateIndicator.style.fontWeight = '500';
   dbUpdateIndicator.style.display = 'none'; // Hidden by default
   controls.appendChild(dbUpdateIndicator);
   
@@ -146,9 +163,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const style = document.createElement('style');
   style.textContent = `
     @keyframes pulse {
-      0% { background-color: rgba(40, 167, 69, 0.6); }
-      50% { background-color: rgba(40, 167, 69, 1); }
-      100% { background-color: rgba(40, 167, 69, 0.6); }
+      0% { background-color: rgba(51, 136, 255, 0.7); }
+      50% { background-color: rgba(51, 136, 255, 1); }
+      100% { background-color: rgba(51, 136, 255, 0.7); }
     }
     .pulse-animation {
       animation: pulse 1s ease-in-out 3;
@@ -1234,6 +1251,13 @@ function toggleBloomEffect() {
       bloomPass.strength = 0;
       console.log('Bloom effect disabled');
     }
+    
+    // Update the button appearance with new color scheme
+    const toggleButton = document.getElementById('toggle-bloom');
+    if (toggleButton) {
+      toggleButton.textContent = `Bloom Effect: ${bloomEnabled ? 'ON' : 'OFF'}`;
+      toggleButton.style.backgroundColor = bloomEnabled ? '#3388ff' : '#525252'; // Blue when on, gray when off
+    }
   } catch (error) {
     console.error('Error toggling bloom effect:', error);
   }
@@ -1246,8 +1270,8 @@ function toggleSummariesOnNodes() {
   // Update the button appearance
   const toggleButton = document.getElementById('toggle-summaries');
   if (toggleButton) {
-    toggleButton.textContent = `Summaries on Nodes: ${showSummariesOnNodes ? 'ON' : 'OFF'}`;
-    toggleButton.style.backgroundColor = showSummariesOnNodes ? '#2a9852' : '#525252'; // Green when on, gray when off
+    toggleButton.textContent = `Node Summaries: ${showSummariesOnNodes ? 'ON' : 'OFF'}`;
+    toggleButton.style.backgroundColor = showSummariesOnNodes ? '#3388ff' : '#525252'; // Blue when on, gray when off
   }
   
   console.log(`Summaries on nodes ${showSummariesOnNodes ? 'enabled' : 'disabled'}`);
@@ -1265,7 +1289,7 @@ function toggleEdgeLabels() {
   const toggleButton = document.getElementById('toggle-edge-labels');
   if (toggleButton) {
     toggleButton.textContent = `Edge Labels: ${showEdgeLabels ? 'ON' : 'OFF'}`;
-    toggleButton.style.backgroundColor = showEdgeLabels ? '#2a9852' : '#525252'; // Green when on, gray when off
+    toggleButton.style.backgroundColor = showEdgeLabels ? '#3388ff' : '#525252'; // Blue when on, gray when off
   }
   
   console.log(`Edge labels ${showEdgeLabels ? 'enabled' : 'disabled'}`);
@@ -1286,7 +1310,7 @@ function toggleDomainLegend() {
   const toggleButton = document.getElementById('toggle-domain-legend');
   if (toggleButton) {
     toggleButton.textContent = `Domain Legend: ${isVisible ? 'OFF' : 'ON'}`;
-    toggleButton.style.backgroundColor = isVisible ? '#525252' : '#2a9852'; // Green when on, gray when off
+    toggleButton.style.backgroundColor = isVisible ? '#525252' : '#3388ff'; // Blue when on, gray when off
   }
   
   console.log(`Domain legend ${isVisible ? 'hidden' : 'shown'}`);
@@ -1341,7 +1365,7 @@ function startDatabaseWatcher() {
   const toggleButton = document.getElementById('toggle-watcher');
   if (toggleButton) {
     toggleButton.textContent = 'DB Watcher: ON';
-    toggleButton.style.backgroundColor = '#2a9852'; // Green background
+    toggleButton.style.backgroundColor = '#3388ff'; // Blue background
   }
   
   console.log('Database file watcher started');
@@ -1360,7 +1384,7 @@ function stopDatabaseWatcher() {
   const toggleButton = document.getElementById('toggle-watcher');
   if (toggleButton) {
     toggleButton.textContent = 'DB Watcher: OFF';
-    toggleButton.style.backgroundColor = '#982a2a'; // Red background
+    toggleButton.style.backgroundColor = '#525252'; // Gray background
   }
   
   console.log('Database file watcher stopped');
