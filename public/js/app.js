@@ -47,6 +47,25 @@ document.addEventListener('DOMContentLoaded', () => {
     • <span style="color:#ff00ff">Control-click</span> a node to delete it and its connections
   `;
   document.body.appendChild(hint);
+  
+  // Add domain legend container
+  const domainLegend = document.createElement('div');
+  domainLegend.id = 'domain-legend';
+  domainLegend.style.position = 'fixed';
+  domainLegend.style.top = '10px';
+  domainLegend.style.right = '10px';
+  domainLegend.style.background = 'rgba(0,0,0,0.7)';
+  domainLegend.style.color = '#fff';
+  domainLegend.style.padding = '12px 16px';
+  domainLegend.style.borderRadius = '6px';
+  domainLegend.style.zIndex = 999;
+  domainLegend.style.fontSize = '14px';
+  domainLegend.style.lineHeight = '1.6';
+  domainLegend.style.maxWidth = '300px';
+  domainLegend.style.maxHeight = '60vh';
+  domainLegend.style.overflowY = 'auto';
+  domainLegend.innerHTML = '<strong>Domain Colors:</strong><br><div id="domain-colors-list"></div>';
+  document.body.appendChild(domainLegend);
 
   initGraph();
   loadData();
@@ -101,6 +120,14 @@ document.addEventListener('DOMContentLoaded', () => {
   edgeLabelsToggle.style.backgroundColor = '#2a9852'; // Green background when on
   edgeLabelsToggle.addEventListener('click', toggleEdgeLabels);
   mainControls.appendChild(edgeLabelsToggle);
+  
+  // Add a toggle button for domain legend
+  const domainLegendToggle = document.createElement('button');
+  domainLegendToggle.id = 'toggle-domain-legend';
+  domainLegendToggle.textContent = 'Domain Legend: ON';
+  domainLegendToggle.style.backgroundColor = '#2a9852'; // Green background when on
+  domainLegendToggle.addEventListener('click', toggleDomainLegend);
+  mainControls.appendChild(domainLegendToggle);
   
   // Add a database update indicator
   const dbUpdateIndicator = document.createElement('div');
@@ -846,6 +873,9 @@ function loadData(preservePositions = false) {
       
       // Hide loading indicator
       document.getElementById('loading-indicator').style.display = 'none';
+      
+      // Update the domain color legend after data is loaded
+      updateDomainColorLegend();
     })
     .catch(error => {
       console.error('Error loading graph data:', error);
@@ -942,25 +972,50 @@ function getNodeColor(node) {
     return node === hoverNode ? '#ff5500' : '#ff8800';
   }
   
-  // Use group (first tag or domain) for color
+  // Use domain for color with consistent mapping
   if (node.group) {
-    // Hash group to color
-    let hash = 0;
-    for (let i = 0; i < node.group.length; i++) {
-      hash = node.group.charCodeAt(i) + ((hash << 5) - hash);
+    // Define a colorPalette (only once) for all domains
+    // Use a global map to ensure consistent colors across updates
+    if (!window.domainColors) {
+      window.domainColors = new Map();
+      window.colorIndex = 0;
+      
+      // Save the color palette as a global variable so we only define it once
+      window.domainColorPalette = [
+        'rgba(66, 133, 244, 0.85)',  // Google Blue
+        'rgba(219, 68, 55, 0.85)',   // Google Red
+        'rgba(244, 180, 0, 0.85)',   // Google Yellow
+        'rgba(15, 157, 88, 0.85)',   // Google Green
+        'rgba(171, 71, 188, 0.85)',  // Purple
+        'rgba(255, 87, 34, 0.85)',   // Deep Orange
+        'rgba(3, 169, 244, 0.85)',   // Light Blue
+        'rgba(0, 150, 136, 0.85)',   // Teal
+        'rgba(255, 152, 0, 0.85)',   // Orange
+        'rgba(156, 39, 176, 0.85)',  // Deep Purple
+        'rgba(233, 30, 99, 0.85)',   // Pink
+        'rgba(33, 150, 243, 0.85)',  // Blue
+        'rgba(76, 175, 80, 0.85)',   // Green
+        'rgba(255, 193, 7, 0.85)',   // Amber
+        'rgba(121, 85, 72, 0.85)',   // Brown
+        'rgba(96, 125, 139, 0.85)'   // Blue Grey
+      ];
     }
-    const r = (hash & 0xFF0000) >> 16;
-    const g = (hash & 0x00FF00) >> 8;
-    const b = hash & 0x0000FF;
     
-    // Create more muted colors with reduced saturation and brightness
-    // Add 100 instead of 128 to avoid overly bright colors
-    const rMuted = Math.min(((r + 100) % 256), 220);
-    const gMuted = Math.min(((g + 100) % 256), 220);
-    const bMuted = Math.min(((b + 100) % 256), 220);
+    // Get or assign color for this domain
+    if (!window.domainColors.has(node.group)) {
+      // Use modulo to cycle through colors if we have more domains than colors
+      const colorIdx = window.colorIndex % window.domainColorPalette.length;
+      window.domainColors.set(node.group, window.domainColorPalette[colorIdx]);
+      window.colorIndex++;
+      
+      // Log assigned color for debugging
+      console.log(`Assigned color ${window.domainColorPalette[colorIdx]} to domain: ${node.group}`);
+      
+      // Update the domain color legend whenever a new domain is added
+      updateDomainColorLegend();
+    }
     
-    // Return the muted color with some transparency to reduce visual intensity
-    return `rgba(${rMuted}, ${gMuted}, ${bMuted}, 0.85)`;
+    return window.domainColors.get(node.group);
   }
   return '#cccccc';
 }
@@ -1219,6 +1274,24 @@ function toggleEdgeLabels() {
   graph.refresh();
 }
 
+// Toggle domain legend visibility
+function toggleDomainLegend() {
+  const domainLegend = document.getElementById('domain-legend');
+  const isVisible = domainLegend.style.display !== 'none';
+  
+  // Toggle visibility
+  domainLegend.style.display = isVisible ? 'none' : 'block';
+  
+  // Update the button appearance
+  const toggleButton = document.getElementById('toggle-domain-legend');
+  if (toggleButton) {
+    toggleButton.textContent = `Domain Legend: ${isVisible ? 'OFF' : 'ON'}`;
+    toggleButton.style.backgroundColor = isVisible ? '#525252' : '#2a9852'; // Green when on, gray when off
+  }
+  
+  console.log(`Domain legend ${isVisible ? 'hidden' : 'shown'}`);
+}
+
 // Function to check if the database file has been modified
 function checkDatabaseStatus() {
   fetch('/api/db-status')
@@ -1300,6 +1373,55 @@ function toggleDatabaseWatcher() {
   } else {
     startDatabaseWatcher();
   }
+}
+
+// Update the domain color legend in the UI
+function updateDomainColorLegend() {
+  const legendContainer = document.getElementById('domain-colors-list');
+  if (!legendContainer) return;
+  
+  // Clear existing legend items
+  legendContainer.innerHTML = '';
+  
+  // No domains yet
+  if (!window.domainColors || window.domainColors.size === 0) {
+    legendContainer.innerHTML = '<em>No domains loaded yet</em>';
+    return;
+  }
+  
+  // Sort domains alphabetically for consistent display
+  const domains = Array.from(window.domainColors.keys()).sort();
+  
+  // Create a legend item for each domain
+  domains.forEach(domain => {
+    const color = window.domainColors.get(domain);
+    const legendItem = document.createElement('div');
+    legendItem.style.marginBottom = '6px';
+    legendItem.style.display = 'flex';
+    legendItem.style.alignItems = 'center';
+    
+    // Create color swatch
+    const colorSwatch = document.createElement('span');
+    colorSwatch.style.display = 'inline-block';
+    colorSwatch.style.width = '12px';
+    colorSwatch.style.height = '12px';
+    colorSwatch.style.backgroundColor = color;
+    colorSwatch.style.marginRight = '8px';
+    colorSwatch.style.borderRadius = '3px';
+    
+    // Create domain name label
+    const domainLabel = document.createElement('span');
+    domainLabel.textContent = domain;
+    domainLabel.style.flexGrow = '1';
+    domainLabel.style.whiteSpace = 'nowrap';
+    domainLabel.style.overflow = 'hidden';
+    domainLabel.style.textOverflow = 'ellipsis';
+    
+    // Add elements to legend item
+    legendItem.appendChild(colorSwatch);
+    legendItem.appendChild(domainLabel);
+    legendContainer.appendChild(legendItem);
+  });
 }
 
 // Show custom confirmation dialog with Yes/No buttons
