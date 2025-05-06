@@ -181,6 +181,217 @@ export function initMenuBar() {
       })
     );
     
+    // Add select database path option
+    fileDropdown.appendChild(
+      createDropdownItem('Select Database...', () => {
+        // Import modules dynamically to avoid circular dependencies
+        Promise.all([
+          import('../ui/fileDialog.js'),
+          import('../core/databaseService.js')
+        ]).then(([fileDialog, databaseService]) => {
+          // Open database path dialog
+          fileDialog.openDatabasePathDialog((selectedPath) => {
+            if (selectedPath) {
+              databaseService.updateDatabaseAndReload(selectedPath)
+                .then(result => {
+                  console.log('Database updated:', result);
+                  
+                  // Create success notification
+                  const notification = document.createElement('div');
+                  notification.className = 'success-notification';
+                  
+                  // Add success message
+                  let successContent = `<div class="success-title">Database Updated</div>`;
+                  successContent += `<div class="success-message">Successfully switched to new database</div>`;
+                  
+                  // Add path details
+                  if (result && result.newPath) {
+                    successContent += `<div class="success-details">Path: ${result.newPath}</div>`;
+                  }
+                  
+                  notification.innerHTML = successContent;
+                  
+                  // Style the notification
+                  notification.style.position = 'fixed';
+                  notification.style.bottom = '10px';
+                  notification.style.right = '10px';
+                  notification.style.backgroundColor = 'rgba(20, 60, 20, 0.95)';
+                  notification.style.color = 'white';
+                  notification.style.padding = '15px';
+                  notification.style.borderRadius = '5px';
+                  notification.style.zIndex = 2000;
+                  notification.style.maxWidth = '400px';
+                  notification.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.5)';
+                  notification.style.border = '1px solid rgba(100, 255, 100, 0.3)';
+                  
+                  // Style success title
+                  const titleStyle = document.createElement('style');
+                  titleStyle.textContent = `
+                    .success-title {
+                      font-weight: bold;
+                      font-size: 16px;
+                      margin-bottom: 8px;
+                      color: #88ff88;
+                    }
+                    .success-message {
+                      margin-bottom: 8px;
+                    }
+                    .success-details {
+                      font-size: 13px;
+                      color: #cccccc;
+                      border-top: 1px solid rgba(100, 255, 100, 0.3);
+                      padding-top: 8px;
+                      margin-top: 8px;
+                      word-break: break-all;
+                    }
+                  `;
+                  document.head.appendChild(titleStyle);
+                  
+                  // Add close button
+                  const closeButton = document.createElement('div');
+                  closeButton.textContent = '✕';
+                  closeButton.style.position = 'absolute';
+                  closeButton.style.top = '8px';
+                  closeButton.style.right = '8px';
+                  closeButton.style.cursor = 'pointer';
+                  closeButton.style.color = '#88ff88';
+                  closeButton.style.fontSize = '16px';
+                  closeButton.addEventListener('click', () => {
+                    if (document.body.contains(notification)) {
+                      document.body.removeChild(notification);
+                    }
+                  });
+                  
+                  notification.appendChild(closeButton);
+                  document.body.appendChild(notification);
+                  
+                  // Remove notification after 5 seconds
+                  setTimeout(() => {
+                    if (document.body.contains(notification)) {
+                      document.body.removeChild(notification);
+                    }
+                  }, 5000);
+                })
+                .catch(error => {
+                  console.error('Error updating database:', error);
+                  
+                  // Create detailed error notification
+                  const errorNotification = document.createElement('div');
+                  errorNotification.className = 'error-notification';
+                  
+                  // Add error title and message
+                  let errorContent = `<div class="error-title">Database Error</div>`;
+                  errorContent += `<div class="error-message">${error.message || 'Failed to update database'}</div>`;
+                  
+                  // Add error details if available
+                  if (error.details) {
+                    errorContent += `<div class="error-details">${error.details}</div>`;
+                  }
+                  
+                  errorNotification.innerHTML = errorContent;
+                  
+                  // Style the notification
+                  errorNotification.style.position = 'fixed';
+                  errorNotification.style.bottom = '10px';
+                  errorNotification.style.right = '10px';
+                  errorNotification.style.backgroundColor = 'rgba(60, 20, 20, 0.95)';
+                  errorNotification.style.color = 'white';
+                  errorNotification.style.padding = '15px';
+                  errorNotification.style.borderRadius = '5px';
+                  errorNotification.style.zIndex = 2000;
+                  errorNotification.style.maxWidth = '400px';
+                  errorNotification.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.5)';
+                  errorNotification.style.border = '1px solid rgba(255, 100, 100, 0.3)';
+                  
+                  // Style error title
+                  const titleStyle = document.createElement('style');
+                  titleStyle.textContent = `
+                    .error-title {
+                      font-weight: bold;
+                      font-size: 16px;
+                      margin-bottom: 8px;
+                      color: #ff8888;
+                    }
+                    .error-message {
+                      margin-bottom: 8px;
+                    }
+                    .error-details {
+                      font-size: 13px;
+                      color: #cccccc;
+                      border-top: 1px solid rgba(255, 100, 100, 0.3);
+                      padding-top: 8px;
+                      margin-top: 8px;
+                    }
+                  `;
+                  document.head.appendChild(titleStyle);
+                  
+                  // Add close button
+                  const closeButton = document.createElement('div');
+                  closeButton.textContent = '✕';
+                  closeButton.style.position = 'absolute';
+                  closeButton.style.top = '8px';
+                  closeButton.style.right = '8px';
+                  closeButton.style.cursor = 'pointer';
+                  closeButton.style.color = '#ff8888';
+                  closeButton.style.fontSize = '16px';
+                  closeButton.addEventListener('click', () => {
+                    if (document.body.contains(errorNotification)) {
+                      document.body.removeChild(errorNotification);
+                    }
+                  });
+                  
+                  errorNotification.appendChild(closeButton);
+                  document.body.appendChild(errorNotification);
+                  
+                  // Remove notification after 8 seconds
+                  setTimeout(() => {
+                    if (document.body.contains(errorNotification)) {
+                      document.body.removeChild(errorNotification);
+                    }
+                  }, 8000);
+                });
+            }
+          });
+        });
+      })
+    );
+    
+    // Add get current database path option
+    fileDropdown.appendChild(
+      createDropdownItem('Current Database Path', () => {
+        // Import databaseService dynamically to avoid circular dependencies
+        import('../core/databaseService.js').then(databaseService => {
+          databaseService.getDatabasePath()
+            .then(path => {
+              // Show path in a notification
+              const notification = document.createElement('div');
+              notification.innerHTML = `<strong>Current Database Path:</strong><br>${path}`;
+              notification.style.position = 'fixed';
+              notification.style.bottom = '10px';
+              notification.style.right = '10px';
+              notification.style.backgroundColor = 'rgba(40, 40, 70, 0.9)';
+              notification.style.color = 'white';
+              notification.style.padding = '10px';
+              notification.style.borderRadius = '5px';
+              notification.style.zIndex = 2000;
+              notification.style.maxWidth = '80%';
+              notification.style.wordBreak = 'break-all';
+              document.body.appendChild(notification);
+              
+              // Remove notification after 5 seconds
+              setTimeout(() => {
+                if (document.body.contains(notification)) {
+                  document.body.removeChild(notification);
+                }
+              }, 5000);
+            })
+            .catch(error => {
+              console.error('Error getting database path:', error);
+            });
+        });
+      })
+    );
+    
     addSeparator(fileDropdown);
     
     fileDropdown.appendChild(
