@@ -623,11 +623,27 @@ export function handleLinkAllSelected() {
       
       console.log(`Created ${successCount} links, skipped ${skipCount} existing links, ${errorCount} errors`);
       
-      // Reload data to reflect changes
-      const { graph } = store.getState();
+      // Find successful link creations
+      const successfulLinks = results.filter(result => result.success).map(result => result.data);
+      
+      // Add the successful links to the graph data visually first
+      const { graphData, graph } = store.getState();
+      successfulLinks.forEach(linkData => {
+        graphData.links.push(linkData);
+      });
+      
+      // Update the graph visualization immediately
       if (graph) {
-        const loadData = require('./graph').loadData;
-        loadData(true); // preserve positions
+        graph.graphData(graphData);
+        
+        // Store the updated graph data
+        store.set('graphData', graphData);
+        
+        // Reload full data from server after a short delay
+        setTimeout(() => {
+          const loadData = require('./graph').loadData;
+          loadData(true, true); // preserve positions and skip links
+        }, 500);
       }
       
       // Show success message

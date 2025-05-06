@@ -74,14 +74,36 @@ export function handleCreateLink(source, target) {
     toggleLinkCreationMode();
   }
   
-  // Create link data
+  // Create link data with the correct API field names
   const linkData = {
-    source_id: source.id,
-    target_id: target.id,
+    source: source.id,
+    target: target.id,
     type: 'relates_to', // Default type
     strength: 0.5, // Default strength
     domain: source.domain || target.domain // Use one of the node's domains if available
   };
+  
+  // Create the link visually FIRST before API call for better UX
+  const tempLink = {
+    source: source.id,
+    target: target.id,
+    type: linkData.type,
+    strength: linkData.strength,
+    domain: linkData.domain,
+    id: `temp_${source.id}_${target.id}` // Temporary ID
+  };
+  
+  // Add the link to the graph data immediately
+  const { graphData, graph } = store.getState();
+  graphData.links.push(tempLink);
+  
+  // Update the graph visualization immediately
+  if (graph) {
+    graph.graphData(graphData);
+  }
+  
+  // Store the updated graph data
+  store.set('graphData', graphData);
   
   // Send API request to create the link
   fetch('/api/edges', {
@@ -94,13 +116,30 @@ export function handleCreateLink(source, target) {
   .then(response => response.json())
   .then(result => {
     if (result.success) {
-      console.log('Link created successfully, reloading data');
+      console.log('Link created successfully on server');
       
-      // Reload data to reflect the new link
-      const loadData = require('./graph').loadData;
-      loadData(true); // preserve positions
+      // Update the temp link with the real ID
+      if (result.id) {
+        const linkIndex = graphData.links.findIndex(l => l.id === `temp_${source.id}_${target.id}`);
+        if (linkIndex !== -1) {
+          graphData.links[linkIndex].id = result.id;
+          if (graph) {
+            graph.graphData(graphData);
+          }
+        }
+      }
     } else {
       console.error('Failed to create link:', result.error || 'Unknown error');
+      
+      // If API call failed, remove the temporary link
+      const linkIndex = graphData.links.findIndex(l => l.id === `temp_${source.id}_${target.id}`);
+      if (linkIndex !== -1) {
+        graphData.links.splice(linkIndex, 1);
+        
+        if (graph) {
+          graph.graphData(graphData);
+        }
+      }
       
       if (result.error && result.error.includes('Edge already exists')) {
         alert('Link already exists between these nodes');
@@ -111,6 +150,17 @@ export function handleCreateLink(source, target) {
   })
   .catch(error => {
     console.error('Error creating link:', error);
+    
+    // If API call failed, remove the temporary link
+    const linkIndex = graphData.links.findIndex(l => l.id === `temp_${source.id}_${target.id}`);
+    if (linkIndex !== -1) {
+      graphData.links.splice(linkIndex, 1);
+      
+      if (graph) {
+        graph.graphData(graphData);
+      }
+    }
+    
     alert('Error creating link: ' + error);
   });
 }
@@ -120,67 +170,109 @@ export function handleCreateLink(source, target) {
  * @param {Object} link - The link to delete
  */
 export function handleDeleteLink(link) {
-  console.log('Deleting link:', link);
+  console.log('Deleting link:', JSON.stringify(link));
   
-  // Get source and target IDs
-  const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-  const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+  if (!link) {
+    console.error('Link is null or undefined');
+    alert('Cannot delete link: Link object is missing');
+    return;
+  }
+  
+  // Get source and target IDs with extra checks
+  let sourceId, targetId;
+  
+  try {
+    if (typeof link.source === 'object' && link.source !== null) {
+      sourceId = link.source.id;
+    } else {
+      sourceId = String(link.source); // Convert to string to ensure it's a valid ID
+    }
+    
+    if (typeof link.target === 'object' && link.target !== null) {
+      targetId = link.target.id;
+    } else {
+      targetId = String(link.target); // Convert to string to ensure it's a valid ID
+    }
+    
+    // Debug info about link - this will help us identify issues
+    console.log('Link details:');
+    console.log('- source type:', typeof link.source);
+    console.log('- target type:', typeof link.target);
+    console.log('- sourceId:', sourceId);
+    console.log('- targetId:', targetId);
+    console.log('- Link has id property:', link.hasOwnProperty('id'));
+    if (link.id) console.log('- link.id:', link.id);
+  } catch (err) {
+    console.error('Error extracting IDs from link:', err);
+    alert('Cannot delete link: Invalid link structure');
+    return;
+  }
+  
+  // Check if we have valid IDs
+  if (!sourceId || !targetId) {
+    console.error('Invalid source or target ID');
+    alert('Cannot delete link: Missing source or target ID');
+    return;
+  }
   
   // Show confirmation dialog
   showCustomConfirmDialog(
     `Are you sure you want to delete link from "${sourceId}" to "${targetId}"?`,
     () => {
       // Construct API endpoint
-      let apiEndpoint = `/api/edges/${link.id}`;
+      // Use the format from the original app.js that we know works correctly
+      const apiEndpoint = `/api/edges/${sourceId}/${targetId}`;
       
-      // If no link ID, use source and target IDs
-      if (!link.id) {
-        apiEndpoint = `/api/edges?source=${sourceId}&target=${targetId}`;
+      console.log(`[API] Deleting link between ${sourceId} and ${targetId}`);
+      
+      // Immediately clear any highlighting to provide visual feedback
+      const { highlightLinks } = store.getState();
+      highlightLinks.clear();
+      updateHighlight();
+      
+      // First update the UI immediately for better user experience
+      const { graphData } = store.getState();
+      const linkIndex = graphData.links.findIndex(l => {
+        const lSourceId = typeof l.source === 'object' ? l.source.id : l.source;
+        const lTargetId = typeof l.target === 'object' ? l.target.id : l.target;
+        
+        return (lSourceId === sourceId && lTargetId === targetId) ||
+              (l.id && l.id === link.id);
+      });
+      
+      if (linkIndex !== -1) {
+        // Remove the link from UI
+        const removedLink = graphData.links.splice(linkIndex, 1)[0];
+        console.log('Removed link from UI:', removedLink);
+        
+        // Update the graph
+        const { graph } = store.getState();
+        if (graph) {
+          graph.graphData(graphData);
+        }
+        
+        // Update state
+        store.set('graphData', graphData);
+        
+        // Clear this link from any selections
+        clearLinkFromSelections(link);
       }
       
-      // Delete the link via API
+      // Then delete from the server (in background)
       fetch(apiEndpoint, {
         method: 'DELETE'
       })
-      .then(response => response.json())
-      .then(result => {
-        if (result.success) {
-          console.log('Link deleted successfully');
-          
-          // Remove the link from our graph data
-          const { graphData } = store.getState();
-          const linkIndex = graphData.links.findIndex(l => {
-            const lSourceId = typeof l.source === 'object' ? l.source.id : l.source;
-            const lTargetId = typeof l.target === 'object' ? l.target.id : l.target;
-            
-            return (lSourceId === sourceId && lTargetId === targetId) ||
-                   (l.id && l.id === link.id);
-          });
-          
-          if (linkIndex !== -1) {
-            // Remove the link
-            graphData.links.splice(linkIndex, 1);
-            
-            // Update the graph
-            const { graph } = store.getState();
-            if (graph) {
-              graph.graphData(graphData);
-            }
-            
-            // Update state
-            store.set('graphData', graphData);
-            
-            // Clear this link from any selections
-            clearLinkFromSelections(link);
-          }
+      .then(res => {
+        console.log('[API] Received response for DELETE /api/edges', res);
+        if (res.ok) {
+          console.log('Link deleted successfully on server');
         } else {
-          console.error('Failed to delete link:', result.error);
-          alert('Failed to delete link: ' + (result.error || 'Unknown error'));
+          console.warn('Server returned non-OK status:', res.status);
         }
       })
-      .catch(error => {
-        console.error('Error deleting link:', error);
-        alert('Error deleting link: ' + error);
+      .catch(err => {
+        console.error('[API] Error deleting link from server:', err);
+        // No need to alert the user, the UI is already updated
       });
     }
   );
@@ -452,10 +544,10 @@ export function getLinkTypePaginationInfo() {
  */
 export function createLinkPromise(source, target) {
   return new Promise(resolve => {
-    // Create link data
+    // Create link data with correct API field names
     const linkPayload = {
-      source_id: source.id,
-      target_id: target.id,
+      source: source.id,
+      target: target.id,
       type: 'relates_to', // Default type
       strength: 0.5, // Default strength
       domain: source.domain || target.domain // Use one of the node's domains if available
@@ -470,7 +562,17 @@ export function createLinkPromise(source, target) {
     .then(res => res.json())
     .then(result => {
       if (result.success) {
-        resolve({ success: true, id: result.id });
+        // Create link data for visual representation
+        const linkData = {
+          source: source.id,
+          target: target.id,
+          type: 'relates_to',
+          strength: 0.5,
+          domain: source.domain || target.domain,
+          id: result.id || `${source.id}_${target.id}`
+        };
+        
+        resolve({ success: true, id: result.id, data: linkData });
       } else if (result.error && result.error.includes('Edge already exists')) {
         resolve({ success: false, error: 'Edge already exists' });
       } else {

@@ -663,6 +663,7 @@ app.delete('/api/edges/:source/:target', (req, res) => {
     console.log('[API] Edge deleted successfully');
     console.log('  Changes:', result.changes);
     
+    res.setHeader('Content-Type', 'application/json');
     res.json({ success: true, deleted: result.changes });
   });
 });

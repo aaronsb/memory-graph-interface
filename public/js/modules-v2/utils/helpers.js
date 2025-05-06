@@ -124,6 +124,11 @@ export function getLinkColor(link) {
   
   const { highlightLinks, controlKeyPressed, hoverLink } = store.getState();
   
+  // Special color for tentative/potential links
+  if (link.type === 'potential_link') {
+    return link.color || '#00ffff'; // Use the specified color or default to cyan
+  }
+  
   // If the link is highlighted
   if (highlightLinks.has(link)) {
     // Special case for hovered link with control key
@@ -188,16 +193,100 @@ export function updateCombinedHighlights() {
  * Update the visual highlighting in the graph
  */
 export function updateHighlight() {
-  const { graph, highlightNodes, highlightLinks } = store.getState();
+  const { 
+    graph, 
+    highlightNodes, 
+    highlightLinks, 
+    draggedNode, 
+    potentialLinkTarget, 
+    temporaryLinkFormed 
+  } = store.getState();
   
   if (!graph) return;
   
-  // Update the graph rendering
+  // Create a temporary virtual link between dragged node and potential target
+  let virtualLinks = [];
+  if (draggedNode && potentialLinkTarget) {
+    virtualLinks = [{
+      source: draggedNode,
+      target: potentialLinkTarget,
+      type: 'potential_link',
+      color: '#00ffff', // Cyan
+      strength: 0.7
+    }];
+  }
+  
+  // Update the graph rendering - make the tentative link more noticeable
   graph
     .nodeColor(node => getNodeColor(node))
-    .linkColor(link => getLinkColor(link))
-    .linkWidth(link => highlightLinks.has(link) ? 4 : 2.5)
-    .linkDirectionalParticles(link => highlightLinks.has(link) ? 6 : 0);
+    .linkColor(link => getLinkColor(link)) // Use our unified getLinkColor function
+    .linkWidth(link => {
+      if (link.type === 'potential_link') return 7; // Even thicker for potential links
+      return highlightLinks.has(link) ? 4 : 2.5;
+    })
+    .linkDirectionalParticles(link => {
+      if (link.type === 'potential_link') return 15; // More particles for potential links
+      return highlightLinks.has(link) ? 6 : 0;
+    })
+    .linkDirectionalParticleSpeed(link => {
+      if (link.type === 'potential_link') return 0.015; // Faster particles for potential links
+      return 0.005; // Normal speed for other links
+    })
+    .linkOpacity(link => {
+      return link.type === 'potential_link' ? 0.8 : 0.6; // Higher opacity for potential links
+    });
+    
+  // Add or remove the virtual link
+  const currentLinks = graph.graphData().links;
+  const virtualLinkExists = currentLinks.some(link => link.type === 'potential_link');
+  
+  if (virtualLinks.length > 0 && !virtualLinkExists) {
+    // Add virtual link
+    console.log('Adding virtual tentative link:', 
+                virtualLinks[0].source.id, 
+                '→',
+                virtualLinks[0].target.id);
+                
+    graph.graphData({
+      nodes: graph.graphData().nodes,
+      links: [...currentLinks, ...virtualLinks]
+    });
+  } else if (virtualLinks.length === 0 && virtualLinkExists) {
+    // Remove virtual link
+    console.log('Removing virtual tentative link');
+    
+    graph.graphData({
+      nodes: graph.graphData().nodes,
+      links: currentLinks.filter(link => link.type !== 'potential_link')
+    });
+  } else if (virtualLinks.length > 0 && virtualLinkExists) {
+    // Virtual link already exists, check if it's the same one or needs to be updated
+    const currentVirtualLink = currentLinks.find(link => link.type === 'potential_link');
+    const newVirtualLink = virtualLinks[0];
+    
+    const currentSourceId = typeof currentVirtualLink.source === 'object' ? 
+                         currentVirtualLink.source.id : currentVirtualLink.source;
+    const currentTargetId = typeof currentVirtualLink.target === 'object' ? 
+                         currentVirtualLink.target.id : currentVirtualLink.target;
+                         
+    const newSourceId = typeof newVirtualLink.source === 'object' ? 
+                      newVirtualLink.source.id : newVirtualLink.source;
+    const newTargetId = typeof newVirtualLink.target === 'object' ? 
+                      newVirtualLink.target.id : newVirtualLink.target;
+    
+    if (currentSourceId !== newSourceId || currentTargetId !== newTargetId) {
+      console.log('Updating virtual tentative link:', 
+                  currentSourceId, '→', currentTargetId,
+                  'to',
+                  newSourceId, '→', newTargetId);
+                  
+      // Remove old virtual link and add new one
+      graph.graphData({
+        nodes: graph.graphData().nodes,
+        links: [...currentLinks.filter(link => link.type !== 'potential_link'), ...virtualLinks]
+      });
+    }
+  }
 }
 
 // Export other utility functions as needed

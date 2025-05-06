@@ -367,16 +367,23 @@ export function initGraph() {
       // Update potential link target
       const potentialLinkTarget = store.get('potentialLinkTarget');
       if (potentialLinkTarget !== closestNode) {
+        console.log('Potential link target changed:', 
+                    potentialLinkTarget ? potentialLinkTarget.id : 'none', 
+                    '→', 
+                    closestNode ? closestNode.id : 'none');
+        
+        // Update the stored potential link target
         store.set('potentialLinkTarget', closestNode);
         
         if (closestNode && !store.get('temporaryLinkFormed')) {
-          console.log('Potential link formed');
+          console.log('Potential link formed with node:', closestNode.id);
           store.set('temporaryLinkFormed', true);
         } else if (!closestNode && store.get('temporaryLinkFormed')) {
           console.log('Potential link lost');
           store.set('temporaryLinkFormed', false);
         }
         
+        // Update visualization to show/hide tentative link
         updateHighlight();
       }
     })
@@ -401,6 +408,23 @@ export function initGraph() {
           domain: node.domain || potentialLinkTarget.domain
         };
         
+        // Create the link visually FIRST before the API call
+        const newLink = {
+          source: node.id,
+          target: potentialLinkTarget.id,
+          type: 'relates_to',
+          strength: 0.7,
+          domain: node.domain || potentialLinkTarget.domain,
+          id: `temp_${node.id}_${potentialLinkTarget.id}` // Temporary ID until we get the real one
+        };
+        
+        // Add the link to the graph data immediately for visual feedback
+        const graphData = store.get('graphData');
+        graphData.links.push(newLink);
+        
+        // Update the graph visualization immediately
+        graph.graphData(graphData);
+        
         console.log('[API] Sending POST /api/edges', linkData);
         
         // Create the link via API
@@ -417,16 +441,29 @@ export function initGraph() {
           console.log('[API] Response JSON for POST /api/edges', result);
           
           if (result.success) {
-            console.log('Link created successfully, reloading data');
+            console.log('Link created successfully');
             
-            // Wait a bit before restoring forces
+            // Update the temporary link with the real ID
+            if (result.id) {
+              const linkIndex = graphData.links.findIndex(l => l.id === `temp_${node.id}_${potentialLinkTarget.id}`);
+              if (linkIndex !== -1) {
+                graphData.links[linkIndex].id = result.id;
+                graph.graphData(graphData);
+              }
+            }
+            
+            // Wait a bit before restoring forces (but don't reload data)
             setTimeout(() => {
               restoreForces(graph);
-              
-              // Reload data to reflect changes
-              loadData(true);
             }, 500);
           } else {
+            // Remove the temporary link if the API call failed
+            const linkIndex = graphData.links.findIndex(l => l.id === `temp_${node.id}_${potentialLinkTarget.id}`);
+            if (linkIndex !== -1) {
+              graphData.links.splice(linkIndex, 1);
+              graph.graphData(graphData);
+            }
+            
             restoreForces(graph);
             console.error('Failed to create link:', result.error || 'Unknown error');
             alert('Failed to create link: ' + (result.error || 'Unknown error'));
@@ -517,14 +554,16 @@ function restoreForces(graph) {
 /**
  * Load graph data from the API
  * @param {boolean} preservePositions - Whether to preserve current node positions
+ * @param {boolean} skipLinks - Whether to skip loading links (useful when manually adding links)
  */
-export function loadData(preservePositions = false) {
+export function loadData(preservePositions = false, skipLinks = false) {
   document.getElementById('loading-indicator').style.display = 'block';
-  console.log('Fetching graph data...');
+  console.log('Fetching graph data...', skipLinks ? '(skipping links)' : '');
   
   // Store current positions if preserving
   const currentPositions = {};
   const graphData = store.get('graphData');
+  const currentLinks = skipLinks ? graphData.links : [];
   
   if (preservePositions && graphData && graphData.nodes) {
     graphData.nodes.forEach(node => {
@@ -552,6 +591,12 @@ export function loadData(preservePositions = false) {
     .then(data => {
       console.log('Data received:', data);
       
+      // If skipLinks is true, replace links in the data with the stored links
+      if (skipLinks) {
+        data.links = currentLinks;
+        console.log('Using stored links instead of fetched links');
+      }
+      
       // Process the data
       processGraphData(data, currentPositions, preservePositions);
       
@@ -574,7 +619,32 @@ export function loadData(preservePositions = false) {
     })
     .catch(error => {
       console.error('Error loading graph data:', error);
-      document.getElementById('loading-indicator').textContent = 'Error loading data. Please try again.';
+      
+      // Hide the loading indicator instead of showing an error
+      document.getElementById('loading-indicator').style.display = 'none';
+      
+      // Check if we need to show an error to the user
+      if (!skipLinks) {
+        // Only show error for full data loads, not for link-only operations
+        const errorIndicator = document.createElement('div');
+        errorIndicator.textContent = 'Error loading data. Please try again.';
+        errorIndicator.style.position = 'fixed';
+        errorIndicator.style.bottom = '10px';
+        errorIndicator.style.right = '10px';
+        errorIndicator.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
+        errorIndicator.style.color = 'white';
+        errorIndicator.style.padding = '10px';
+        errorIndicator.style.borderRadius = '5px';
+        errorIndicator.style.zIndex = 1000;
+        document.body.appendChild(errorIndicator);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+          if (document.body.contains(errorIndicator)) {
+            document.body.removeChild(errorIndicator);
+          }
+        }, 3000);
+      }
     });
 }
 
