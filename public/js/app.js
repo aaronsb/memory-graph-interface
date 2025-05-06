@@ -71,27 +71,31 @@ document.addEventListener('DOMContentLoaded', () => {
   initGraph();
   loadData();
   
-  // Event listeners
-  document.getElementById('refresh-btn').addEventListener('click', loadData);
-  document.getElementById('toggle-bloom').addEventListener('click', toggleBloomEffect);
+  // Get the original controls container
+  const originalControls = document.getElementById('controls');
   
-  // Create a controls container with vertical layout
-  const controls = document.getElementById('controls');
+  // Remove any existing styles or contents
+  originalControls.innerHTML = '';
+  originalControls.removeAttribute('style');
   
-  // Create a flex container for the buttons that will size to its content
-  controls.style.display = 'flex';
-  controls.style.flexDirection = 'column';
-  controls.style.gap = '6px'; // Slightly reduced gap for tighter layout
-  controls.style.zIndex = 1001; // Higher z-index than the hint
-  controls.style.position = 'absolute';
-  controls.style.top = '10px'; // Position at top-left instead of bottom
-  controls.style.left = '10px';
-  controls.style.width = '200px'; // Reduced width for vertical layout
-  controls.style.padding = '10px';
-  controls.style.backgroundColor = 'rgba(0,0,0,0.4)'; // Semi-transparent background
-  controls.style.borderRadius = '6px';
-  controls.style.height = 'auto'; // Allow height to adjust to content
-  controls.style.maxHeight = '95vh'; // Prevent overflow on small screens
+  // Create a new controls container with proper vertical layout that sizes to content
+  const controlsWrapper = document.createElement('div');
+  controlsWrapper.id = 'controls-wrapper';
+  controlsWrapper.style.display = 'flex';
+  controlsWrapper.style.flexDirection = 'column';
+  controlsWrapper.style.gap = '6px'; // Slightly reduced gap for tighter layout
+  controlsWrapper.style.zIndex = 1001; // Higher z-index than the hint
+  controlsWrapper.style.width = '200px'; // Reduced width for vertical layout
+  controlsWrapper.style.padding = '10px';
+  controlsWrapper.style.backgroundColor = 'rgba(0,0,0,0.4)'; // Semi-transparent background
+  controlsWrapper.style.borderRadius = '6px';
+  controlsWrapper.style.boxSizing = 'border-box';
+  
+  // Add the new wrapper to the original controls
+  originalControls.appendChild(controlsWrapper);
+  
+  // Use the wrapper for all controls
+  const controls = controlsWrapper;
   
   // Unified button styling function
   const styleButton = (button, isOn) => {
@@ -106,14 +110,20 @@ document.addEventListener('DOMContentLoaded', () => {
     button.style.color = 'white';
   };
   
-  // Add refresh button
-  const refreshBtn = document.getElementById('refresh-btn');
+  // Create a new refresh button
+  const refreshBtn = document.createElement('button');
+  refreshBtn.id = 'refresh-btn';
+  refreshBtn.textContent = 'Refresh Data';
   styleButton(refreshBtn, true);
+  refreshBtn.addEventListener('click', loadData);
   controls.appendChild(refreshBtn);
   
-  // Add toggle button for bloom effect
-  const bloomToggle = document.getElementById('toggle-bloom');
+  // Create a new toggle button for bloom effect
+  const bloomToggle = document.createElement('button');
+  bloomToggle.id = 'toggle-bloom';
+  bloomToggle.textContent = 'Bloom Effect: ON';
   styleButton(bloomToggle, true);
+  bloomToggle.addEventListener('click', toggleBloomEffect);
   controls.appendChild(bloomToggle);
   
   // Add a toggle button for database file watching
