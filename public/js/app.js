@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const domainLegend = document.createElement('div');
   domainLegend.id = 'domain-legend';
   domainLegend.style.position = 'fixed';
-  domainLegend.style.top = '10px';
+  domainLegend.style.bottom = '10px';
   domainLegend.style.right = '10px';
   domainLegend.style.background = 'rgba(0,0,0,0.7)';
   domainLegend.style.color = '#fff';
@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
   domainLegend.style.fontSize = '14px';
   domainLegend.style.lineHeight = '1.6';
   domainLegend.style.maxWidth = '300px';
-  domainLegend.style.maxHeight = '60vh';
+  domainLegend.style.maxHeight = '40vh'; // Reduced from 60vh to be more compact
   domainLegend.style.overflowY = 'auto';
   domainLegend.innerHTML = '<strong>Domain Colors:</strong><br><div id="domain-colors-list"></div>';
   document.body.appendChild(domainLegend);
