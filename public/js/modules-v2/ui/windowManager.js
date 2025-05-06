@@ -24,7 +24,7 @@ function setupEventListeners() {
   // Listen for domain legend creation events
   eventBus.on('domainLegend:created', (legendId) => {
     if (document.getElementById(legendId)) {
-      makeDraggable(legendId, { addHeader: false });
+      makeDraggable(legendId, { controls: [] });
     }
   });
 }
@@ -463,7 +463,7 @@ export function initializeDraggableWindows() {
   const domainLegend = document.getElementById('domain-legend');
   if (domainLegend) {
     makeDraggable('domain-legend', {
-      // No custom controls needed, it already has a close button
+      controls: [] // No custom controls needed, they are already added in the updateDomainColorLegend function
     });
   }
   
