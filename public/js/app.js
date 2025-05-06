@@ -24,11 +24,11 @@ let dbWatcherInterval = null; // Store the interval ID for database checking
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
-  // Add a UI hint for linking - positioned to avoid overlap with controls
+  // Add a UI hint for linking - positioned in the upper left
   const hint = document.createElement('div');
   hint.id = 'link-hint';
   hint.style.position = 'fixed';
-  hint.style.bottom = '10px';
+  hint.style.top = '10px';
   hint.style.left = '10px';
   hint.style.background = 'rgba(0,0,0,0.7)';
   hint.style.color = '#fff';
@@ -76,7 +76,12 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Remove any existing styles or contents
   originalControls.innerHTML = '';
-  originalControls.removeAttribute('style');
+  
+  // Make sure the original controls container is positioned in the lower left
+  originalControls.style.position = 'fixed';
+  originalControls.style.bottom = '10px';
+  originalControls.style.left = '10px';
+  originalControls.style.zIndex = 1000;
   
   // Create a new controls container with proper vertical layout that sizes to content
   const controlsWrapper = document.createElement('div');
@@ -90,6 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
   controlsWrapper.style.backgroundColor = 'rgba(0,0,0,0.4)'; // Semi-transparent background
   controlsWrapper.style.borderRadius = '6px';
   controlsWrapper.style.boxSizing = 'border-box';
+  controlsWrapper.style.marginBottom = '0'; // Ensure it's at the bottom edge
   
   // Add the new wrapper to the original controls
   originalControls.appendChild(controlsWrapper);
