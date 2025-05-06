@@ -32,6 +32,11 @@ let linkSourceNode = null;
 let allDomains = []; // Array to store all available domains
 let currentDomainPage = 0; // Current page in domain pagination
 const DOMAINS_PER_PAGE = 10; // Number of domains to show per page
+
+// Link type management
+let allLinkTypes = []; // Array to store all available link types
+let currentLinkTypePage = 0; // Current page in link type pagination
+const LINK_TYPES_PER_PAGE = 10; // Number of link types to show per page
 let hoverNode = null;
 let hoverLink = null; // Track the link being hovered
 let selectedNode = null;
@@ -936,6 +941,15 @@ function loadData(preservePositions = false) {
       
       // Update the domain color legend after data is loaded
       updateDomainColorLegend();
+      
+      // Fetch link types for context menu
+      fetchLinkTypes()
+        .then(types => {
+          console.log(`Loaded ${types.length} link types for context menus`);
+        })
+        .catch(err => {
+          console.warn('Error fetching link types, will use defaults:', err);
+        });
     })
     .catch(error => {
       console.error('Error loading graph data:', error);
@@ -1698,20 +1712,25 @@ function populateContextMenu(contextMenu, node, link) {
     header.textContent = `Link: ${sourceId.substring(0, 10)}... → ${targetId.substring(0, 10)}...`;
     contextMenu.appendChild(header);
     
-    // Link information
+    // Link information - current type
     const linkTypeItem = document.createElement('div');
-    linkTypeItem.className = 'context-menu-item';
+    linkTypeItem.className = 'context-menu-item has-submenu';
     linkTypeItem.textContent = `Type: ${link.type || 'Unknown'}`;
-    linkTypeItem.style.fontStyle = 'italic';
-    linkTypeItem.style.opacity = '0.8';
     contextMenu.appendChild(linkTypeItem);
     
+    // Create and add the link type submenu
+    const linkTypeSubmenu = createLinkTypeSubmenu(link);
+    linkTypeItem.appendChild(linkTypeSubmenu);
+    
+    // Link strength with interactive submenu
     const linkStrengthItem = document.createElement('div');
-    linkStrengthItem.className = 'context-menu-item';
+    linkStrengthItem.className = 'context-menu-item has-submenu';
     linkStrengthItem.textContent = `Strength: ${(link.strength || 0).toFixed(2)}`;
-    linkStrengthItem.style.fontStyle = 'italic';
-    linkStrengthItem.style.opacity = '0.8';
     contextMenu.appendChild(linkStrengthItem);
+    
+    // Create and add the strength submenu
+    const strengthSubmenu = createStrengthSubmenu(link);
+    linkStrengthItem.appendChild(strengthSubmenu);
     
     // Add separator
     const separator = document.createElement('div');
@@ -2250,6 +2269,68 @@ function getDomainPaginationInfo() {
   return `${startItem}-${endItem} of ${allDomains.length} domains (Page ${currentDomainPage + 1}/${totalPages})`;
 }
 
+// Fetch all link types from the API
+function fetchLinkTypes() {
+  console.log('Fetching link types from API...');
+  
+  return fetch('/api/link-types')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`Failed to fetch link types: ${response.status} ${response.statusText}`);
+      }
+      return response.json();
+    })
+    .then(types => {
+      console.log(`Received ${types.length} link types from API`);
+      
+      // Store the link types
+      allLinkTypes = types.sort();
+      
+      // Reset to first page
+      currentLinkTypePage = 0;
+      
+      return allLinkTypes;
+    })
+    .catch(error => {
+      console.error('Error fetching link types:', error);
+      // Return a default set of link types if there's an error
+      return ['relates_to', 'synthesizes', 'supports', 'refines'];
+    });
+}
+
+// Get link types for the current pagination page
+function getCurrentPageLinkTypes() {
+  const startIndex = currentLinkTypePage * LINK_TYPES_PER_PAGE;
+  return allLinkTypes.slice(startIndex, startIndex + LINK_TYPES_PER_PAGE);
+}
+
+// Navigate to the next page of link types
+function nextLinkTypePage() {
+  const maxPage = Math.ceil(allLinkTypes.length / LINK_TYPES_PER_PAGE) - 1;
+  if (currentLinkTypePage < maxPage) {
+    currentLinkTypePage++;
+    return true;
+  }
+  return false;
+}
+
+// Navigate to the previous page of link types
+function prevLinkTypePage() {
+  if (currentLinkTypePage > 0) {
+    currentLinkTypePage--;
+    return true;
+  }
+  return false;
+}
+
+// Get current pagination info text for link types
+function getLinkTypePaginationInfo() {
+  const totalPages = Math.ceil(allLinkTypes.length / LINK_TYPES_PER_PAGE);
+  const startItem = currentLinkTypePage * LINK_TYPES_PER_PAGE + 1;
+  const endItem = Math.min((currentLinkTypePage + 1) * LINK_TYPES_PER_PAGE, allLinkTypes.length);
+  return `${startItem}-${endItem} of ${allLinkTypes.length} types (Page ${currentLinkTypePage + 1}/${totalPages})`;
+}
+
 // Update the domain color legend in the UI
 function updateDomainColorLegend() {
   const legendContainer = document.getElementById('domain-colors-list');
@@ -2335,6 +2416,481 @@ function showCustomConfirmDialog(message, yesCallback) {
   
   // Show the dialog
   dialog.style.display = 'block';
+}
+
+// Create a strength adjustment submenu for links
+function createStrengthSubmenu(link) {
+  // Create a submenu container
+  const submenu = document.createElement('div');
+  submenu.className = 'context-submenu strength-submenu';
+  submenu.style.width = '220px'; // Wider to accommodate the slider
+  
+  // Add a header showing current strength
+  const header = document.createElement('div');
+  header.className = 'context-menu-header';
+  header.textContent = `Current Strength: ${(link.strength || 0).toFixed(2)}`;
+  submenu.appendChild(header);
+  
+  // Create a container for the strength slider
+  const sliderContainer = document.createElement('div');
+  sliderContainer.className = 'strength-slider-container';
+  sliderContainer.style.padding = '15px 12px';
+  sliderContainer.style.position = 'relative';
+  
+  // Create visual slider track
+  const sliderTrack = document.createElement('div');
+  sliderTrack.className = 'strength-slider-track';
+  sliderTrack.style.width = '100%';
+  sliderTrack.style.height = '6px';
+  sliderTrack.style.backgroundColor = 'rgba(60, 60, 80, 0.7)';
+  sliderTrack.style.borderRadius = '3px';
+  sliderTrack.style.position = 'relative';
+  sliderContainer.appendChild(sliderTrack);
+  
+  // Create slider handle
+  const sliderHandle = document.createElement('div');
+  sliderHandle.className = 'strength-slider-handle';
+  sliderHandle.style.width = '16px';
+  sliderHandle.style.height = '16px';
+  sliderHandle.style.backgroundColor = '#3388ff';
+  sliderHandle.style.borderRadius = '50%';
+  sliderHandle.style.position = 'absolute';
+  sliderHandle.style.top = '50%';
+  sliderHandle.style.transform = 'translate(-50%, -50%)';
+  sliderHandle.style.cursor = 'pointer';
+  sliderHandle.style.boxShadow = '0 0 5px rgba(0, 0, 0, 0.3)';
+  
+  // Position the handle based on current strength
+  const strength = link.strength || 0;
+  const handlePosition = strength * 100;
+  sliderHandle.style.left = `${handlePosition}%`;
+  
+  // Create active track (colored portion)
+  const activeTrack = document.createElement('div');
+  activeTrack.className = 'strength-slider-active';
+  activeTrack.style.height = '100%';
+  activeTrack.style.width = `${handlePosition}%`;
+  activeTrack.style.backgroundColor = '#3388ff';
+  activeTrack.style.borderRadius = '3px';
+  activeTrack.style.position = 'absolute';
+  activeTrack.style.left = '0';
+  activeTrack.style.top = '0';
+  sliderTrack.appendChild(activeTrack);
+  sliderTrack.appendChild(sliderHandle);
+  
+  // Value display
+  const valueDisplay = document.createElement('div');
+  valueDisplay.className = 'strength-value';
+  valueDisplay.textContent = strength.toFixed(2);
+  valueDisplay.style.textAlign = 'center';
+  valueDisplay.style.marginTop = '10px';
+  valueDisplay.style.fontSize = '14px';
+  valueDisplay.style.fontWeight = 'bold';
+  
+  // Numeric input for direct value entry
+  const inputContainer = document.createElement('div');
+  inputContainer.className = 'strength-input-container';
+  inputContainer.style.display = 'flex';
+  inputContainer.style.alignItems = 'center';
+  inputContainer.style.justifyContent = 'center';
+  inputContainer.style.marginTop = '10px';
+  
+  const inputLabel = document.createElement('span');
+  inputLabel.textContent = 'Set value: ';
+  inputLabel.style.marginRight = '5px';
+  
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = '0';
+  input.max = '1';
+  input.step = '0.01';
+  input.value = strength.toFixed(2);
+  input.style.width = '60px';
+  input.style.backgroundColor = 'rgba(40, 40, 60, 0.7)';
+  input.style.color = 'white';
+  input.style.border = '1px solid #3388ff';
+  input.style.borderRadius = '3px';
+  input.style.padding = '3px 5px';
+  input.style.textAlign = 'center';
+  
+  const applyButton = document.createElement('button');
+  applyButton.textContent = 'Apply';
+  applyButton.style.marginLeft = '5px';
+  applyButton.style.padding = '3px 8px';
+  applyButton.style.background = '#3388ff';
+  applyButton.style.border = 'none';
+  applyButton.style.borderRadius = '3px';
+  applyButton.style.color = 'white';
+  applyButton.style.cursor = 'pointer';
+  
+  // Add event listener for the Apply button
+  applyButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const newStrength = parseFloat(input.value);
+    if (!isNaN(newStrength) && newStrength >= 0 && newStrength <= 1) {
+      handleChangeStrength(link, newStrength);
+      hideContextMenu();
+    } else {
+      alert('Please enter a valid strength value between 0 and 1');
+    }
+  });
+  
+  // Add event listener for Enter key on input
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.stopPropagation();
+      applyButton.click();
+    }
+  });
+  
+  inputContainer.appendChild(inputLabel);
+  inputContainer.appendChild(input);
+  inputContainer.appendChild(applyButton);
+  
+  // Instructions for wheel adjustment
+  const wheelInstruction = document.createElement('div');
+  wheelInstruction.className = 'wheel-instruction';
+  wheelInstruction.textContent = 'Use mouse wheel to adjust';
+  wheelInstruction.style.textAlign = 'center';
+  wheelInstruction.style.fontSize = '12px';
+  wheelInstruction.style.color = '#aaa';
+  wheelInstruction.style.marginTop = '5px';
+  
+  // Add mouse wheel event for adjustment
+  submenu.addEventListener('wheel', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Calculate new strength based on wheel direction
+    // Delta is normalized, so we use a small increment/decrement
+    const delta = event.deltaY > 0 ? -0.01 : 0.01;
+    let newStrength = parseFloat((strength + delta).toFixed(2));
+    
+    // Clamp the value between 0 and 1
+    newStrength = Math.max(0, Math.min(1, newStrength));
+    
+    // Update the slider and input
+    updateStrengthUI(sliderHandle, activeTrack, valueDisplay, input, newStrength);
+    
+    // If wheel event stopped, save the change
+    clearTimeout(submenu.wheelTimer);
+    submenu.wheelTimer = setTimeout(() => {
+      handleChangeStrength(link, newStrength);
+    }, 500);
+  });
+  
+  // Add the elements to the submenu
+  sliderContainer.appendChild(valueDisplay);
+  sliderContainer.appendChild(inputContainer);
+  sliderContainer.appendChild(wheelInstruction);
+  submenu.appendChild(sliderContainer);
+  
+  // Make the slider interactive
+  let isDragging = false;
+  
+  // Function to handle slider movement
+  const handleSliderMove = (event) => {
+    if (!isDragging) return;
+    
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Calculate the relative position within the track
+    const rect = sliderTrack.getBoundingClientRect();
+    let x = event.clientX - rect.left;
+    
+    // Clamp the position within the track
+    x = Math.max(0, Math.min(x, rect.width));
+    
+    // Calculate strength from position (0-1 range)
+    const newStrength = parseFloat((x / rect.width).toFixed(2));
+    
+    // Update the UI elements
+    updateStrengthUI(sliderHandle, activeTrack, valueDisplay, input, newStrength);
+  };
+  
+  // Function to handle slider release
+  const handleSliderRelease = () => {
+    if (!isDragging) return;
+    isDragging = false;
+    
+    // Remove the event listeners when not dragging
+    document.removeEventListener('mousemove', handleSliderMove);
+    document.removeEventListener('mouseup', handleSliderRelease);
+    
+    // Save the change
+    const newStrength = parseFloat(valueDisplay.textContent);
+    handleChangeStrength(link, newStrength);
+  };
+  
+  // Add event listeners for dragging
+  sliderHandle.addEventListener('mousedown', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    isDragging = true;
+    
+    // Add event listeners for move and release
+    document.addEventListener('mousemove', handleSliderMove);
+    document.addEventListener('mouseup', handleSliderRelease);
+  });
+  
+  // Allow clicking on the track to jump to a position
+  sliderTrack.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Calculate the relative position within the track
+    const rect = sliderTrack.getBoundingClientRect();
+    let x = event.clientX - rect.left;
+    
+    // Clamp the position within the track
+    x = Math.max(0, Math.min(x, rect.width));
+    
+    // Calculate strength from position (0-1 range)
+    const newStrength = parseFloat((x / rect.width).toFixed(2));
+    
+    // Update the UI elements
+    updateStrengthUI(sliderHandle, activeTrack, valueDisplay, input, newStrength);
+    
+    // Save the change
+    handleChangeStrength(link, newStrength);
+  });
+  
+  return submenu;
+}
+
+// Update the UI elements for the strength slider
+function updateStrengthUI(handle, activeTrack, valueDisplay, input, strength) {
+  // Position the handle
+  handle.style.left = `${strength * 100}%`;
+  
+  // Update the active track width
+  activeTrack.style.width = `${strength * 100}%`;
+  
+  // Update the value display
+  valueDisplay.textContent = strength.toFixed(2);
+  
+  // Update the input field
+  input.value = strength.toFixed(2);
+}
+
+// Handle changing a link's strength
+function handleChangeStrength(link, newStrength) {
+  if (!link || typeof newStrength !== 'number' || newStrength < 0 || newStrength > 1) {
+    console.warn('Invalid strength change attempt - missing link or invalid strength value');
+    return;
+  }
+  
+  // No change needed if the strength is very close to the current value
+  if (Math.abs(link.strength - newStrength) < 0.01) {
+    console.log('Link already has similar strength:', newStrength);
+    return;
+  }
+  
+  // Get source and target IDs
+  const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+  const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+  
+  console.log(`Changing link between ${sourceId} and ${targetId} from strength ${link.strength.toFixed(2)} to ${newStrength.toFixed(2)}`);
+  
+  // Prepare the request payload
+  const payload = {
+    source: sourceId,
+    target: targetId,
+    newStrength: newStrength
+  };
+  
+  // Send request to update link strength
+  fetch('/api/edges/update-strength', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(res => {
+    console.log('[API] Received response for POST /api/edges/update-strength', res);
+    return res.json();
+  })
+  .then(result => {
+    console.log('[API] Response JSON for update link strength:', result);
+    if (result.success) {
+      // Clear any selection and reload data with position preservation
+      loadData(true);
+      console.log('Link strength updated successfully');
+    } else {
+      alert('Failed to update link strength: ' + (result.error || 'Unknown error'));
+    }
+  })
+  .catch(err => {
+    console.error('[API] Error updating link strength:', err);
+    alert('Error updating link strength: ' + err);
+  });
+}
+
+// Create a link type submenu with pagination
+function createLinkTypeSubmenu(link) {
+  // Ensure we have the link types
+  if (allLinkTypes.length === 0) {
+    // Fetch link types if we don't have them yet
+    fetchLinkTypes();
+    
+    // Use a default set for now
+    allLinkTypes = ['relates_to', 'synthesizes', 'supports', 'refines'];
+  }
+  
+  // Create a submenu container
+  const submenu = document.createElement('div');
+  submenu.className = 'context-submenu';
+  
+  // Add a header showing current link type
+  const header = document.createElement('div');
+  header.className = 'context-menu-header';
+  header.textContent = `Current Type: ${link.type || 'Unknown'}`;
+  submenu.appendChild(header);
+  
+  // Get current page link types
+  const currentPageTypes = getCurrentPageLinkTypes();
+  
+  // If no link types found
+  if (currentPageTypes.length === 0) {
+    const noTypesItem = document.createElement('div');
+    noTypesItem.className = 'context-menu-item';
+    noTypesItem.textContent = 'No link types available';
+    noTypesItem.style.fontStyle = 'italic';
+    noTypesItem.style.opacity = '0.7';
+    submenu.appendChild(noTypesItem);
+  } else {
+    // Add each link type as a menu item
+    currentPageTypes.forEach(type => {
+      const typeItem = document.createElement('div');
+      typeItem.className = 'context-menu-item';
+      
+      // Mark the current type
+      if (type === link.type) {
+        typeItem.innerHTML = `${type} <span style="margin-left: 6px; color: #55ff55;">✓</span>`;
+        typeItem.style.fontWeight = 'bold';
+      } else {
+        typeItem.textContent = type;
+      }
+      
+      // Handle click to change link type
+      typeItem.addEventListener('click', () => {
+        handleChangeLinkType(link, type);
+        hideContextMenu();
+      });
+      
+      submenu.appendChild(typeItem);
+    });
+  }
+  
+  // Add pagination controls if there are more types than fit on one page
+  if (allLinkTypes.length > LINK_TYPES_PER_PAGE) {
+    // Add a separator
+    const separator = document.createElement('div');
+    separator.className = 'context-menu-separator';
+    submenu.appendChild(separator);
+    
+    // Add pagination info
+    const paginationInfo = document.createElement('div');
+    paginationInfo.className = 'pagination-info';
+    paginationInfo.textContent = getLinkTypePaginationInfo();
+    submenu.appendChild(paginationInfo);
+    
+    // Add pagination controls container
+    const paginationControls = document.createElement('div');
+    paginationControls.className = 'submenu-pagination';
+    
+    // Add previous button
+    const prevButton = document.createElement('button');
+    prevButton.className = 'pagination-button';
+    prevButton.textContent = '« Previous';
+    prevButton.disabled = currentLinkTypePage === 0;
+    prevButton.addEventListener('click', (event) => {
+      // This stops the click from bubbling up and closing the context menu
+      event.stopPropagation();
+      if (prevLinkTypePage()) {
+        // Replace the current submenu with a new one
+        const parentItem = submenu.parentNode;
+        submenu.remove();
+        const newSubMenu = createLinkTypeSubmenu(link);
+        parentItem.appendChild(newSubMenu);
+      }
+    });
+    paginationControls.appendChild(prevButton);
+    
+    // Add next button
+    const nextButton = document.createElement('button');
+    nextButton.className = 'pagination-button';
+    nextButton.textContent = 'Next »';
+    nextButton.disabled = currentLinkTypePage >= Math.ceil(allLinkTypes.length / LINK_TYPES_PER_PAGE) - 1;
+    nextButton.addEventListener('click', (event) => {
+      // This stops the click from bubbling up and closing the context menu
+      event.stopPropagation();
+      if (nextLinkTypePage()) {
+        // Replace the current submenu with a new one
+        const parentItem = submenu.parentNode;
+        submenu.remove();
+        const newSubMenu = createLinkTypeSubmenu(link);
+        parentItem.appendChild(newSubMenu);
+      }
+    });
+    paginationControls.appendChild(nextButton);
+    
+    submenu.appendChild(paginationControls);
+  }
+  
+  return submenu;
+}
+
+// Handle changing a link's type
+function handleChangeLinkType(link, newType) {
+  if (!link || !newType) {
+    console.warn('Invalid link type change attempt - missing link or type');
+    return;
+  }
+  
+  // No change needed if the type is the same
+  if (link.type === newType) {
+    console.log('Link already has type:', newType);
+    return;
+  }
+  
+  // Get source and target IDs
+  const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+  const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+  
+  console.log(`Changing link between ${sourceId} and ${targetId} from type ${link.type} to ${newType}`);
+  
+  // Prepare the request payload
+  const payload = {
+    source: sourceId,
+    target: targetId,
+    newType: newType
+  };
+  
+  // Send request to update link type
+  fetch('/api/edges/update-type', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(res => {
+    console.log('[API] Received response for POST /api/edges/update-type', res);
+    return res.json();
+  })
+  .then(result => {
+    console.log('[API] Response JSON for update link type:', result);
+    if (result.success) {
+      // Clear any selection and reload data with position preservation
+      loadData(true);
+      console.log('Link type updated successfully');
+    } else {
+      alert('Failed to update link type: ' + (result.error || 'Unknown error'));
+    }
+  })
+  .catch(err => {
+    console.error('[API] Error updating link type:', err);
+    alert('Error updating link type: ' + err);
+  });
 }
 
 // ================= Multi-node Selection Functions =================

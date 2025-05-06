@@ -193,6 +193,32 @@ app.get('/api/edges', (req, res) => {
   });
 });
 
+// API endpoint to get all unique link types
+app.get('/api/link-types', (req, res) => {
+  console.log('==== [API] GET /api/link-types request received ====');
+  
+  const query = `
+    SELECT DISTINCT type
+    FROM MEMORY_EDGES
+    ORDER BY type ASC
+  `;
+  
+  executeWithRetry((db, callback) => {
+    db.all(query, [], callback);
+  }, 3, (err, types) => {
+    if (err) {
+      console.error('Error fetching link types:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    
+    // Transform the result into a simple array of strings
+    const linkTypes = types.map(t => t.type).filter(Boolean);
+    console.log(`[API] Found ${linkTypes.length} distinct link types`);
+    
+    res.json(linkTypes);
+  });
+});
+
 // API endpoint to update a node's domain
 app.post('/api/nodes/update-domain', (req, res) => {
   console.log('==== [API] POST /api/nodes/update-domain request received ====');
@@ -444,6 +470,156 @@ app.post('/api/tags', (req, res) => {
       return res.status(500).json({ error: err.message });
     }
     res.json({ success: true, added: tags.length });
+  });
+});
+
+// API endpoint to update a link's strength
+app.post('/api/edges/update-strength', (req, res) => {
+  console.log('==== [API] POST /api/edges/update-strength request received ====');
+  console.log('[API] Request body:', JSON.stringify(req.body, null, 2));
+  
+  const { source, target, newStrength } = req.body;
+  
+  // Validate required fields
+  if (!source || !target || typeof newStrength !== 'number' || newStrength < 0 || newStrength > 1) {
+    console.log('[API] POST /api/edges/update-strength error: Missing or invalid required fields');
+    console.log('  source:', source);
+    console.log('  target:', target);
+    console.log('  newStrength:', newStrength);
+    return res.status(400).json({ error: 'Missing or invalid required fields (strength must be between 0 and 1)' });
+  }
+  
+  // Step 1: Check if the edge exists
+  const checkEdgeQuery = `
+    SELECT id, strength FROM MEMORY_EDGES 
+    WHERE (source = ? AND target = ?) OR (source = ? AND target = ?)
+  `;
+  
+  executeWithRetry((db, callback) => {
+    db.get(checkEdgeQuery, [source, target, target, source], callback);
+  }, 3, (err, edge) => {
+    if (err) {
+      console.error('[API] Error checking edge:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    
+    if (!edge) {
+      console.log('[API] Error: Edge does not exist');
+      return res.status(404).json({ error: 'Edge not found' });
+    }
+    
+    // No need to update if strength is the same (within a small epsilon)
+    if (Math.abs(edge.strength - newStrength) < 0.001) {
+      console.log('[API] Edge already has the requested strength, no update needed');
+      return res.json({ success: true, changed: false });
+    }
+    
+    // Step 2: Update the edge's strength
+    const updateQuery = `
+      UPDATE MEMORY_EDGES SET strength = ? 
+      WHERE (source = ? AND target = ?) OR (source = ? AND target = ?)
+    `;
+    
+    executeWithRetry((db, callback) => {
+      db.run(updateQuery, [newStrength, source, target, target, source], function(err) {
+        if (err) {
+          callback(err);
+        } else {
+          callback(null, { changes: this.changes });
+        }
+      });
+    }, 3, (err, result) => {
+      if (err) {
+        console.error('[API] Error updating edge strength:', err.message);
+        return res.status(500).json({ error: err.message });
+      }
+      
+      console.log(`[API] Updated strength for edge between ${source} and ${target} from ${edge.strength} to ${newStrength}`);
+      console.log('  Changes:', result.changes);
+      
+      res.json({ 
+        success: true, 
+        changed: true, 
+        edge: edge.id,
+        oldStrength: edge.strength,
+        newStrength: newStrength
+      });
+    });
+  });
+});
+
+// API endpoint to update a link's type
+app.post('/api/edges/update-type', (req, res) => {
+  console.log('==== [API] POST /api/edges/update-type request received ====');
+  console.log('[API] Request body:', JSON.stringify(req.body, null, 2));
+  
+  const { source, target, newType } = req.body;
+  
+  // Validate required fields
+  if (!source || !target || !newType) {
+    console.log('[API] POST /api/edges/update-type error: Missing required fields');
+    console.log('  source:', source);
+    console.log('  target:', target);
+    console.log('  newType:', newType);
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  
+  // Step 1: Check if the edge exists
+  const checkEdgeQuery = `
+    SELECT id, type FROM MEMORY_EDGES 
+    WHERE (source = ? AND target = ?) OR (source = ? AND target = ?)
+  `;
+  
+  executeWithRetry((db, callback) => {
+    db.get(checkEdgeQuery, [source, target, target, source], callback);
+  }, 3, (err, edge) => {
+    if (err) {
+      console.error('[API] Error checking edge:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    
+    if (!edge) {
+      console.log('[API] Error: Edge does not exist');
+      return res.status(404).json({ error: 'Edge not found' });
+    }
+    
+    // No need to update if type is the same
+    if (edge.type === newType) {
+      console.log('[API] Edge already has the requested type, no update needed');
+      return res.json({ success: true, changed: false });
+    }
+    
+    // Step 2: Update the edge's type
+    const updateQuery = `
+      UPDATE MEMORY_EDGES SET type = ? 
+      WHERE (source = ? AND target = ?) OR (source = ? AND target = ?)
+    `;
+    
+    executeWithRetry((db, callback) => {
+      db.run(updateQuery, [newType, source, target, target, source], function(err) {
+        if (err) {
+          callback(err);
+        } else {
+          callback(null, { changes: this.changes });
+        }
+      });
+    }, 3, (err, result) => {
+      if (err) {
+        console.error('[API] Error updating edge type:', err.message);
+        return res.status(500).json({ error: err.message });
+      }
+      
+      console.log(`[API] Updated type for edge between ${source} and ${target} from ${edge.type} to ${newType}`);
+      console.log('  Changes:', result.changes);
+      
+      res.json({ 
+        success: true, 
+        changed: true, 
+        edge: edge.id,
+        oldType: edge.type,
+        newType: newType
+      });
+    });
   });
 });
 
