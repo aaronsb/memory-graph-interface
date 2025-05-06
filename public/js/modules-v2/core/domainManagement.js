@@ -107,11 +107,46 @@ export function handleChangeDomain(node, newDomain) {
  * Update the domain color legend
  */
 export function updateDomainColorLegend() {
-  // Get domains
-  const allDomains = store.get('allDomains');
+  // Get domains and ensure we have fresh data
+  let allDomains = store.get('allDomains');
   if (!allDomains || allDomains.length === 0) {
-    collectAllDomains();
+    allDomains = collectAllDomains();
   }
+  
+  // Initialize domain colors if not already set
+  // This ensures the color palette is consistent with the color assignment in getNodeColor()
+  if (!window.domainColors) {
+    window.domainColors = new Map();
+    window.colorIndex = 0;
+    window.domainColorPalette = [
+      'rgba(66, 133, 244, 0.85)',  // Google Blue
+      'rgba(219, 68, 55, 0.85)',   // Google Red
+      'rgba(244, 180, 0, 0.85)',   // Google Yellow
+      'rgba(15, 157, 88, 0.85)',   // Google Green
+      'rgba(171, 71, 188, 0.85)',  // Purple
+      'rgba(255, 87, 34, 0.85)',   // Deep Orange
+      'rgba(3, 169, 244, 0.85)',   // Light Blue
+      'rgba(0, 150, 136, 0.85)',   // Teal
+      'rgba(255, 152, 0, 0.85)',   // Orange
+      'rgba(156, 39, 176, 0.85)',  // Purple
+      'rgba(233, 30, 99, 0.85)',   // Pink
+      'rgba(33, 150, 243, 0.85)',  // Blue
+      'rgba(76, 175, 80, 0.85)',   // Green
+      'rgba(255, 193, 7, 0.85)',   // Amber
+      'rgba(121, 85, 72, 0.85)',   // Brown
+      'rgba(96, 125, 139, 0.85)'   // Blue Grey
+    ];
+  }
+  
+  // Assign colors to any domain that doesn't have one yet
+  allDomains.forEach(domain => {
+    if (!window.domainColors.has(domain)) {
+      const colorIdx = window.colorIndex % window.domainColorPalette.length;
+      window.domainColors.set(domain, window.domainColorPalette[colorIdx]);
+      window.colorIndex++;
+      console.log(`[Legend] Assigned color ${window.domainColorPalette[colorIdx]} to domain: ${domain}`);
+    }
+  });
   
   // Get or create the legend element
   let legend = document.getElementById('domain-legend');
@@ -131,31 +166,61 @@ export function updateDomainColorLegend() {
     legend.style.maxWidth = '300px';
     legend.style.maxHeight = '50vh';
     legend.style.overflowY = 'auto';
+    legend.style.border = '1px solid rgba(100, 100, 255, 0.3)';
     
-    // Create a header
+    // Create a header with class for windowManager to identify as drag handle
     const header = document.createElement('div');
+    header.className = 'window-header drag-handle';
     header.style.fontSize = '14px';
     header.style.fontWeight = 'bold';
     header.style.marginBottom = '8px';
+    header.style.marginTop = '-5px';
+    header.style.marginLeft = '-5px';
+    header.style.marginRight = '-5px';
+    header.style.padding = '8px';
     header.style.display = 'flex';
     header.style.justifyContent = 'space-between';
     header.style.alignItems = 'center';
-    header.textContent = 'Domain Colors';
+    header.style.cursor = 'move';
+    header.style.borderBottom = '1px solid rgba(100, 100, 255, 0.3)';
+    
+    // Add title
+    const titleSpan = document.createElement('span');
+    titleSpan.textContent = 'Domain Colors';
+    titleSpan.className = 'window-title';
+    header.appendChild(titleSpan);
+    
+    // Add controls container
+    const controlsContainer = document.createElement('div');
+    controlsContainer.className = 'window-controls';
+    controlsContainer.style.display = 'flex';
+    controlsContainer.style.gap = '8px';
     
     // Add close button
     const closeButton = document.createElement('span');
     closeButton.textContent = '✖';
+    closeButton.className = 'window-control close-button';
     closeButton.style.cursor = 'pointer';
-    closeButton.style.marginLeft = '10px';
     closeButton.addEventListener('click', () => {
       legend.style.display = 'none';
     });
     
-    header.appendChild(closeButton);
+    controlsContainer.appendChild(closeButton);
+    header.appendChild(controlsContainer);
     legend.appendChild(header);
     
     // Add to the document
     document.body.appendChild(legend);
+    
+    // Emit an event that the domain legend has been created
+    // This avoids circular dependencies with windowManager
+    try {
+      import('../utils/eventBus.js').then(eventBus => {
+        eventBus.emit('domainLegend:created', 'domain-legend');
+      });
+    } catch (error) {
+      console.warn('Failed to notify about domain legend creation:', error);
+    }
   }
   
   // Clear existing legend items
@@ -164,7 +229,7 @@ export function updateDomainColorLegend() {
   }
   
   // Add legend items
-  (store.get('allDomains') || []).forEach(domain => {
+  (allDomains || []).forEach(domain => {
     // Get color for this domain
     let color = '#aaaaff'; // Default color
     

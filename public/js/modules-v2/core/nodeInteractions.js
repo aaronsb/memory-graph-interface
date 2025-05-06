@@ -7,12 +7,40 @@
 
 import store from '../state/store.js';
 import { updateCombinedHighlights, updateHighlight } from '../utils/helpers.js';
+import * as eventBus from '../utils/eventBus.js';
 
 /**
- * Show details for a node in the info panel
+ * Show details for a node in the info panel, or deselect if already selected
  * @param {Object} node - The node to show details for
  */
 export function handleViewNodeDetails(node) {
+  const currentSelectedNode = store.get('selectedNode');
+  
+  // Check if the node is already selected
+  if (currentSelectedNode && currentSelectedNode.id === node.id) {
+    console.log('Deselecting node:', node.id);
+    
+    // Clear selection
+    store.set('selectedNode', null);
+    
+    // Clear highlights
+    const { selectedHighlightNodes, selectedHighlightLinks } = store.getState();
+    selectedHighlightNodes.clear();
+    selectedHighlightLinks.clear();
+    
+    // Update highlights
+    updateCombinedHighlights();
+    updateHighlight();
+    
+    // Hide info panel
+    const infoPanel = document.getElementById('info-panel');
+    if (infoPanel) {
+      infoPanel.style.display = 'none';
+    }
+    
+    return;
+  }
+  
   console.log('Viewing details for node:', node.id);
   
   // Update state
@@ -641,8 +669,8 @@ export function handleLinkAllSelected() {
         
         // Reload full data from server after a short delay
         setTimeout(() => {
-          const loadData = require('./graph').loadData;
-          loadData(true, true); // preserve positions and skip links
+          // Emit event to reload graph data
+          eventBus.emit('graph:reload', { preservePositions: true, skipLinks: true });
         }, 500);
       }
       
@@ -654,6 +682,28 @@ export function handleLinkAllSelected() {
       alert('Error creating links: ' + error);
     });
 }
+
+// Setup event listeners for cross-module communication
+eventBus.on('node:editTags', () => {
+  const selectedNode = store.get('selectedNode');
+  if (selectedNode) {
+    handleShowTagInput(selectedNode);
+  }
+});
+
+eventBus.on('node:selectionCleared', () => {
+  // Clear selected node
+  store.set('selectedNode', null);
+  
+  // Clear highlights
+  const { selectedHighlightNodes, selectedHighlightLinks } = store.getState();
+  selectedHighlightNodes.clear();
+  selectedHighlightLinks.clear();
+  
+  // Update displays
+  updateCombinedHighlights();
+  updateHighlight();
+});
 
 // Export module
 export default {

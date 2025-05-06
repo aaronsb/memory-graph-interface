@@ -636,6 +636,31 @@ function keepContextMenuInViewport(contextMenu) {
 // Using nextDomainPage, prevDomainPage from domainManagement.js
 // Using nextLinkTypePage, prevLinkTypePage from linkManagement.js
 
+/**
+ * Initialize context menu event listeners
+ */
+function initContextMenuEventListeners() {
+  // Add document-level click listener to dismiss context menu when clicking outside
+  document.addEventListener('mousedown', (event) => {
+    const contextMenu = document.getElementById('context-menu');
+    if (contextMenu && contextMenu.style.display !== 'none') {
+      // Check if the click is outside the context menu
+      if (!contextMenu.contains(event.target)) {
+        hideContextMenu();
+      }
+    }
+  });
+}
+
+// Initialize event listeners when DOM is loaded
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initContextMenuEventListeners);
+  } else {
+    initContextMenuEventListeners();
+  }
+}
+
 // Export context menu module
 export default {
   showContextMenu,

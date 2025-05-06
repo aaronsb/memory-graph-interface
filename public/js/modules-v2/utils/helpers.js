@@ -99,12 +99,23 @@ export function getNodeColor(node) {
       const colorIdx = window.colorIndex % window.domainColorPalette.length;
       window.domainColors.set(node.group, window.domainColorPalette[colorIdx]);
       window.colorIndex++;
-      console.log(`Assigned color ${window.domainColorPalette[colorIdx]} to domain: ${node.group}`);
+      console.log(`[Helper] Assigned color ${window.domainColorPalette[colorIdx]} to domain: ${node.group}`);
       
-      // Call the domain color legend update function if it exists
-      if (typeof updateDomainColorLegend === 'function') {
-        updateDomainColorLegend();
-      }
+      // Queue an update to the legend to run after the current execution
+      setTimeout(() => {
+        try {
+          // Import the domainManagement module dynamically to avoid circular references
+          import('../core/domainManagement.js').then(domainManagement => {
+            if (typeof domainManagement.updateDomainColorLegend === 'function') {
+              domainManagement.updateDomainColorLegend();
+            }
+          }).catch(error => {
+            console.warn('Failed to update domain color legend:', error);
+          });
+        } catch (error) {
+          console.warn('Failed to update domain color legend:', error);
+        }
+      }, 0);
     }
 
     return window.domainColors.get(node.group);

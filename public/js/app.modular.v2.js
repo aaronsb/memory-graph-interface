@@ -13,6 +13,7 @@ import {
   domainManagement,
   controls, 
   contextMenu,
+  windowManager,
   helpers 
 } from './modules-v2/index.js';
 
@@ -26,14 +27,35 @@ document.addEventListener('DOMContentLoaded', () => {
   // Set up selection panel listeners
   nodeInteractions.setupSelectionPanelListeners();
   
+  // Initialize draggable windows
+  windowManager.initializeDraggableWindows();
+  
+  // Register event handlers for communication between modules
+  nodeInteractions.setupSelectionPanelListeners();
+  
   // Initialize graph
   const graphInstance = graph.initGraph();
   
   // Load initial data
-  graph.loadData();
-  
-  // Initialize domain color legend
-  domainManagement.updateDomainColorLegend();
+  graph.loadData().then(() => {
+    // Initialize domain color legend after data is loaded
+    console.log('Data loaded, updating domain color legend');
+    // Ensure all domains are collected from the graph data
+    domainManagement.collectAllDomains();
+    domainManagement.updateDomainColorLegend();
+    
+    // Initialize domain legend as draggable if it was created
+    const domainLegend = document.getElementById('domain-legend');
+    if (domainLegend && !domainLegend.draggableInitialized) {
+      windowManager.makeDraggable('domain-legend', {
+        // No custom controls needed, it already has a close button
+      });
+    }
+  }).catch(error => {
+    console.error('Error loading data:', error);
+    // Initialize domain color legend even if data loading fails
+    domainManagement.updateDomainColorLegend();
+  });
   
   // Fetch link types
   linkManagement.fetchLinkTypes();
@@ -51,6 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
       domainManagement,
       controls,
       contextMenu,
+      windowManager,
       helpers,
       getState: () => store.getState()
     };

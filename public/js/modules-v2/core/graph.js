@@ -10,6 +10,7 @@ import { showContextMenu, hideContextMenu } from '../ui/contextMenu.js';
 import { handleViewNodeDetails, handleMultiSelectNode, handleDeleteNode, showCustomConfirmDialog } from './nodeInteractions.js';
 import { toggleLinkCreationMode, handleCreateLink, handleDeleteLink } from './linkManagement.js';
 import { collectAllDomains, updateDomainColorLegend } from './domainManagement.js';
+import * as eventBus from '../utils/eventBus.js';
 
 /**
  * Initialize the 3D force graph
@@ -555,6 +556,7 @@ function restoreForces(graph) {
  * Load graph data from the API
  * @param {boolean} preservePositions - Whether to preserve current node positions
  * @param {boolean} skipLinks - Whether to skip loading links (useful when manually adding links)
+ * @returns {Promise} - A promise that resolves when data loading is complete
  */
 export function loadData(preservePositions = false, skipLinks = false) {
   document.getElementById('loading-indicator').style.display = 'block';
@@ -582,70 +584,76 @@ export function loadData(preservePositions = false, skipLinks = false) {
     console.log('Stored positions for', Object.keys(currentPositions).length, 'nodes');
   }
   
-  // Fetch data from API
-  fetch('/api/graph/memory')
-    .then(response => {
-      console.log('Response received:', response.status);
-      return response.json();
-    })
-    .then(data => {
-      console.log('Data received:', data);
-      
-      // If skipLinks is true, replace links in the data with the stored links
-      if (skipLinks) {
-        data.links = currentLinks;
-        console.log('Using stored links instead of fetched links');
-      }
-      
-      // Process the data
-      processGraphData(data, currentPositions, preservePositions);
-      
-      // Hide loading indicator
-      document.getElementById('loading-indicator').style.display = 'none';
-      
-      // Update domain colors
-      if (typeof updateDomainColorLegend === 'function') {
-        updateDomainColorLegend();
-      }
-      
-      // Fetch link types
-      if (typeof fetchLinkTypes === 'function') {
-        fetchLinkTypes().then(types => {
-          console.log(`Loaded ${types.length} link types for context menus`);
-        }).catch(error => {
-          console.warn('Error fetching link types, will use defaults:', error);
-        });
-      }
-    })
-    .catch(error => {
-      console.error('Error loading graph data:', error);
-      
-      // Hide the loading indicator instead of showing an error
-      document.getElementById('loading-indicator').style.display = 'none';
-      
-      // Check if we need to show an error to the user
-      if (!skipLinks) {
-        // Only show error for full data loads, not for link-only operations
-        const errorIndicator = document.createElement('div');
-        errorIndicator.textContent = 'Error loading data. Please try again.';
-        errorIndicator.style.position = 'fixed';
-        errorIndicator.style.bottom = '10px';
-        errorIndicator.style.right = '10px';
-        errorIndicator.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
-        errorIndicator.style.color = 'white';
-        errorIndicator.style.padding = '10px';
-        errorIndicator.style.borderRadius = '5px';
-        errorIndicator.style.zIndex = 1000;
-        document.body.appendChild(errorIndicator);
+  // Return a promise that resolves when the data loading is complete
+  return new Promise((resolve, reject) => {
+    // Fetch data from API
+    fetch('/api/graph/memory')
+      .then(response => {
+        console.log('Response received:', response.status);
+        return response.json();
+      })
+      .then(data => {
+        console.log('Data received:', data);
         
-        // Remove after 3 seconds
-        setTimeout(() => {
-          if (document.body.contains(errorIndicator)) {
-            document.body.removeChild(errorIndicator);
-          }
-        }, 3000);
-      }
-    });
+        // If skipLinks is true, replace links in the data with the stored links
+        if (skipLinks) {
+          data.links = currentLinks;
+          console.log('Using stored links instead of fetched links');
+        }
+        
+        // Process the data
+        processGraphData(data, currentPositions, preservePositions);
+        
+        // Hide loading indicator
+        document.getElementById('loading-indicator').style.display = 'none';
+        
+        // Update domain colors (now handled by the caller)
+        
+        // Fetch link types
+        if (typeof fetchLinkTypes === 'function') {
+          fetchLinkTypes().then(types => {
+            console.log(`Loaded ${types.length} link types for context menus`);
+          }).catch(error => {
+            console.warn('Error fetching link types, will use defaults:', error);
+          });
+        }
+        
+        // Resolve the promise with the data
+        resolve(data);
+      })
+      .catch(error => {
+        console.error('Error loading graph data:', error);
+        
+        // Hide the loading indicator instead of showing an error
+        document.getElementById('loading-indicator').style.display = 'none';
+        
+        // Check if we need to show an error to the user
+        if (!skipLinks) {
+          // Only show error for full data loads, not for link-only operations
+          const errorIndicator = document.createElement('div');
+          errorIndicator.textContent = 'Error loading data. Please try again.';
+          errorIndicator.style.position = 'fixed';
+          errorIndicator.style.bottom = '10px';
+          errorIndicator.style.right = '10px';
+          errorIndicator.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
+          errorIndicator.style.color = 'white';
+          errorIndicator.style.padding = '10px';
+          errorIndicator.style.borderRadius = '5px';
+          errorIndicator.style.zIndex = 1000;
+          document.body.appendChild(errorIndicator);
+          
+          // Remove after 3 seconds
+          setTimeout(() => {
+            if (document.body.contains(errorIndicator)) {
+              document.body.removeChild(errorIndicator);
+            }
+          }, 3000);
+        }
+        
+        // Reject the promise with the error
+        reject(error);
+      });
+  });
 }
 
 /**
@@ -731,6 +739,11 @@ export function processGraphData(data, currentPositions = {}, preservePositions 
     graph.graphData(newGraphData);
   }
 }
+
+// Set up event listeners for cross-module communication
+eventBus.on('graph:reload', ({ preservePositions = false, skipLinks = false }) => {
+  loadData(preservePositions, skipLinks);
+});
 
 // Module exports
 export default {

@@ -11,7 +11,9 @@ import * as linkManagement from './core/linkManagement.js';
 import * as domainManagement from './core/domainManagement.js';
 import * as controls from './ui/controls.js';
 import * as contextMenu from './ui/contextMenu.js';
+import * as windowManager from './ui/windowManager.js';
 import * as helpers from './utils/helpers.js';
+import * as eventBus from './utils/eventBus.js';
 
 // Export for direct importing
 export {
@@ -22,7 +24,9 @@ export {
   domainManagement,
   controls,
   contextMenu,
-  helpers
+  windowManager,
+  helpers,
+  eventBus
 };
 
 // Default export for importing everything at once
@@ -34,5 +38,7 @@ export default {
   domainManagement,
   controls,
   contextMenu,
-  helpers
+  windowManager,
+  helpers,
+  eventBus
 };

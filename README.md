@@ -21,6 +21,7 @@ Click the image above to watch a demonstration of the Memory Graph Interface bei
 - **3D Force-Directed Graph**: Visualize memory nodes and their connections in an interactive 3D space
 - **Node Interaction**: Click nodes to view detailed content, add tags, and manage connections
 - **Link Creation**: Create links between nodes by shift-clicking or dragging nodes together
+- **Visual Cues**: Node sizes reflect the number of tags (larger nodes have more tags), and colors indicate domain membership
 - **Real-time Updates**: Automatically detect changes to the underlying database
 - **Visual Effects**: Toggle bloom effect for enhanced visualization
 - **Multi-domain Support**: Visualize connections across different memory domains
