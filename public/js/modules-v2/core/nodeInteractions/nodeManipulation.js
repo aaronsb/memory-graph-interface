@@ -385,6 +385,28 @@ export function handleChangeSelectedNodesDomain() {
     domainContainer.style.padding = '5px';
     domainContainer.style.marginBottom = '15px';
     
+    // Add checkbox for pruning cross-domain edges
+    const pruneEdgesContainer = document.createElement('div');
+    pruneEdgesContainer.style.padding = '10px';
+    pruneEdgesContainer.style.marginBottom = '10px';
+    pruneEdgesContainer.style.borderBottom = '1px solid rgba(100, 100, 255, 0.2)';
+    
+    const pruneEdgesCheckbox = document.createElement('input');
+    pruneEdgesCheckbox.type = 'checkbox';
+    pruneEdgesCheckbox.id = 'prune-edges-checkbox';
+    pruneEdgesCheckbox.style.marginRight = '10px';
+    
+    const pruneEdgesLabel = document.createElement('label');
+    pruneEdgesLabel.htmlFor = 'prune-edges-checkbox';
+    pruneEdgesLabel.textContent = 'Prune edges to nodes in different domains';
+    pruneEdgesLabel.style.cursor = 'pointer';
+    pruneEdgesLabel.style.userSelect = 'none';
+    
+    pruneEdgesContainer.appendChild(pruneEdgesCheckbox);
+    pruneEdgesContainer.appendChild(pruneEdgesLabel);
+    
+    modal.insertBefore(pruneEdgesContainer, domainContainer);
+    
     // Add domain options
     allDomains.forEach(domain => {
       const option = document.createElement('div');
@@ -421,10 +443,35 @@ export function handleChangeSelectedNodesDomain() {
       
       // Click handler
       option.addEventListener('click', () => {
-        // Apply domain change to all selected nodes
-        applyDomainChangeToSelectedNodes(domain);
-        // Remove modal
+        // Get prune edges option
+        const pruneEdges = pruneEdgesCheckbox.checked;
+        
+        // Remove modal before applying the change to prevent UI freeze
         document.body.removeChild(modal);
+        
+        // Show a processing indicator
+        const processingIndicator = document.createElement('div');
+        processingIndicator.textContent = `Processing domain change for ${multiSelectedNodes.length} nodes...`;
+        processingIndicator.style.position = 'fixed';
+        processingIndicator.style.bottom = '20px';
+        processingIndicator.style.right = '20px';
+        processingIndicator.style.backgroundColor = 'rgba(30, 30, 40, 0.95)';
+        processingIndicator.style.color = '#fff';
+        processingIndicator.style.padding = '10px 20px';
+        processingIndicator.style.borderRadius = '5px';
+        processingIndicator.style.zIndex = '1000';
+        document.body.appendChild(processingIndicator);
+        
+        // Apply domain change to all selected nodes
+        applyDomainChangeToSelectedNodes(domain, pruneEdges)
+          .then(result => {
+            // Remove processing indicator when done
+            setTimeout(() => {
+              if (document.body.contains(processingIndicator)) {
+                document.body.removeChild(processingIndicator);
+              }
+            }, 1000);
+          });
       });
       
       domainContainer.appendChild(option);
@@ -463,105 +510,123 @@ export function handleChangeSelectedNodesDomain() {
 /**
  * Apply domain change to all selected nodes
  * @param {string} newDomain - The new domain to apply
+ * @param {boolean} pruneEdges - Whether to prune edges to nodes in different domains
+ * @returns {Promise} - A promise that resolves when all updates are complete
  */
-export function applyDomainChangeToSelectedNodes(newDomain) {
+export function applyDomainChangeToSelectedNodes(newDomain, pruneEdges = false) {
   const { multiSelectedNodes } = store.getState();
   
   if (!multiSelectedNodes || multiSelectedNodes.length === 0) {
     console.log('No nodes selected for domain change');
-    return;
+    return Promise.resolve({ updatedCount: 0, errorCount: 0 });
   }
   
   console.log(`Changing domain of ${multiSelectedNodes.length} nodes to ${newDomain}`);
   
-  // Import domain management
-  import('../../core/domainManagement.js').then(domainModule => {
-    // Create a copy of the array to avoid issues during updates
-    const nodesToUpdate = [...multiSelectedNodes];
-    let updatedCount = 0;
-    let errorCount = 0;
-    
-    // Update each node
-    const updatePromises = nodesToUpdate.map(node => {
-      // Skip if domain is already set to the new value
-      if (node.domain === newDomain) {
-        console.log(`Node ${node.id} already has domain ${newDomain}`);
-        return Promise.resolve({ success: true, node, skipped: true });
-      }
+  // Return a promise that resolves when all updates are complete
+  return new Promise((resolve, reject) => {
+    // Import domain management
+    import('../../core/domainManagement.js').then(domainModule => {
+      // Create a copy of the array to avoid issues during updates
+      const nodesToUpdate = [...multiSelectedNodes];
+      let updatedCount = 0;
+      let errorCount = 0;
       
-      // Prepare update data
-      const updateData = {
-        node_id: node.id,
-        domain: newDomain
-      };
-      
-      // Update via API
-      return fetch('/api/nodes/update-domain', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(updateData)
-      })
-      .then(response => response.json())
-      .then(result => {
-        if (result.success) {
-          console.log(`Domain of node ${node.id} updated successfully`);
-          updatedCount++;
-          return { success: true, node };
-        } else {
-          console.error(`Failed to update domain of node ${node.id}:`, result.error);
+      // Update each node
+      const updatePromises = nodesToUpdate.map(node => {
+        // Skip if domain is already set to the new value
+        if (node.domain === newDomain) {
+          console.log(`Node ${node.id} already has domain ${newDomain}`);
+          return Promise.resolve({ success: true, node, skipped: true });
+        }
+        
+        // Prepare update data
+        const updateData = {
+          node_id: node.id,
+          domain: newDomain,
+          pruneEdges: pruneEdges
+        };
+        
+        // Update via API
+        return fetch('/api/nodes/update-domain', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(updateData)
+        })
+        .then(response => response.json())
+        .then(result => {
+          if (result.success) {
+            console.log(`Domain of node ${node.id} updated successfully`);
+            updatedCount++;
+            return { success: true, node };
+          } else {
+            console.error(`Failed to update domain of node ${node.id}:`, result.error);
+            errorCount++;
+            return { success: false, node, error: result.error };
+          }
+        })
+        .catch(error => {
+          console.error(`Error updating domain of node ${node.id}:`, error);
           errorCount++;
-          return { success: false, node, error: result.error };
-        }
-      })
-      .catch(error => {
-        console.error(`Error updating domain of node ${node.id}:`, error);
-        errorCount++;
-        return { success: false, node, error };
+          return { success: false, node, error };
+        });
       });
-    });
-    
-    // Process all updates
-    Promise.all(updatePromises)
-      .then(results => {
-        console.log(`Updated domain of ${updatedCount}/${nodesToUpdate.length} nodes, ${errorCount} errors`);
-        
-        // Update nodes in the graph data
-        const { graphData } = store.getState();
-        
-        // Process each successful update
-        results
-          .filter(result => result.success && !result.skipped)
-          .forEach(result => {
-            const nodeIndex = graphData.nodes.findIndex(n => n.id === result.node.id);
-            
-            if (nodeIndex !== -1) {
-              // Update the node
-              graphData.nodes[nodeIndex].domain = newDomain;
-              graphData.nodes[nodeIndex].group = newDomain; // Update group for ForceGraph rendering
-            }
+      
+      // Process all updates
+      Promise.all(updatePromises)
+        .then(results => {
+          console.log(`Updated domain of ${updatedCount}/${nodesToUpdate.length} nodes, ${errorCount} errors`);
+          
+          // Update nodes in the graph data
+          const { graphData } = store.getState();
+          
+          // Process each successful update
+          results
+            .filter(result => result.success && !result.skipped)
+            .forEach(result => {
+              const nodeIndex = graphData.nodes.findIndex(n => n.id === result.node.id);
+              
+              if (nodeIndex !== -1) {
+                // Update the node
+                graphData.nodes[nodeIndex].domain = newDomain;
+                graphData.nodes[nodeIndex].group = newDomain; // Update group for ForceGraph rendering
+              }
+            });
+          
+          // Update the graph
+          const { graph } = store.getState();
+          if (graph) {
+            graph.graphData(graphData);
+          }
+          
+          // Update state
+          store.set('graphData', graphData);
+          
+          // Update memory domains panel if the domain is new
+          const allDomains = store.get('allDomains') || [];
+          if (!allDomains.includes(newDomain)) {
+            domainModule.collectAllDomains().then(() => {
+              domainModule.updateMemoryDomainsPanel();
+            });
+          }
+          
+          // Resolve the promise with the result
+          resolve({ 
+            updatedCount, 
+            errorCount, 
+            totalCount: nodesToUpdate.length 
           });
-        
-        // Update the graph
-        const { graph } = store.getState();
-        if (graph) {
-          graph.graphData(graphData);
-        }
-        
-        // Update state
-        store.set('graphData', graphData);
-        
-        // Update memory domains panel if the domain is new
-        const allDomains = store.get('allDomains') || [];
-        if (!allDomains.includes(newDomain)) {
-          domainModule.collectAllDomains();
-          domainModule.updateMemoryDomainsPanel();
-        }
-        
-        // Show result
-        alert(`Updated domain of ${updatedCount} nodes, ${errorCount} errors`);
-      });
+        })
+        .catch(error => {
+          console.error('Error processing domain updates:', error);
+          reject(error);
+        });
+    }).catch(error => {
+      console.error('Error importing domain management module:', error);
+      reject(error);
+    });
   });
 }
 

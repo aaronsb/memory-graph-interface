@@ -123,20 +123,17 @@ export function showDomainEditDialog(currentDomain, onComplete) {
 export function updateMemoryDomainsPanel() {
   // Get domains and ensure we have fresh data
   import('./domainCollection.js').then(collection => {
-    let allDomains = store.get('allDomains');
-    if (!allDomains || allDomains.length === 0) {
-      allDomains = collection.collectAllDomains();
-    }
-    
-    // Initialize domain colors if not already set
-    import('./colorManagement.js').then(colors => {
-      colors.initializeDomainColors();
-      
-      // Assign colors to any domain that doesn't have one yet
-      colors.assignColorsToAllDomains(allDomains);
-      
-      // Get node counts for each domain
-      const domainCounts = collection.getDomainNodeCounts();
+    // Always collect fresh domains from the API and graph data
+    collection.collectAllDomains().then(allDomains => {
+      // Initialize domain colors if not already set
+      import('./colorManagement.js').then(colors => {
+        colors.initializeDomainColors();
+        
+        // Assign colors to any domain that doesn't have one yet
+        colors.assignColorsToAllDomains(allDomains);
+        
+        // Get node counts for each domain
+        const domainCounts = collection.getDomainNodeCounts();
       
       // Get or create the legend element
       let legend = document.getElementById('domain-legend');
@@ -422,8 +419,9 @@ export function updateMemoryDomainsPanel() {
       
       createButtonContainer.appendChild(createButton);
       legend.appendChild(createButtonContainer);
-    });
-  });
+        }); // Close the colors.then
+      }); // Close the collectAllDomains.then
+    }); // Close the collection.then
 }
 
 /**
