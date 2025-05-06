@@ -5,6 +5,7 @@ let bloomEnabled = true;
 let showSummariesOnNodes = true; // Track if summaries should be shown on nodes (ON by default)
 let showEdgeLabels = false; // Track if edge labels should be shown (OFF by default)
 let zoomOnSelect = false; // Track if camera should zoom to selected node (OFF by default)
+let showHelpCard = true; // Track if help card should be shown (ON by default)
 let highlightNodes = new Set(); // Combined set of highlighted nodes
 let highlightLinks = new Set(); // Combined set of highlighted links
 let selectedHighlightNodes = new Set(); // Only nodes highlighted due to selection
@@ -43,6 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
   hint.style.fontSize = '14px';
   hint.style.lineHeight = '1.4';
   hint.style.maxWidth = '400px';
+  hint.style.display = 'block'; // Ensure it's visible by default
   hint.innerHTML = `
     <strong>Memory Graph Interaction:</strong><br>
     • <span style="color:#00ff00">Shift-click</span> two nodes to create a link between them<br>
@@ -176,6 +178,14 @@ document.addEventListener('DOMContentLoaded', () => {
   styleButton(zoomToggle, false);  // OFF by default
   zoomToggle.addEventListener('click', toggleZoomOnSelect);
   controls.appendChild(zoomToggle);
+  
+  // Add a toggle button for the help card
+  const helpCardToggle = document.createElement('button');
+  helpCardToggle.id = 'toggle-help-card';
+  helpCardToggle.textContent = 'Help Card: ON';
+  styleButton(helpCardToggle, true);  // ON by default
+  helpCardToggle.addEventListener('click', toggleHelpCard);
+  controls.appendChild(helpCardToggle);
   
   // Add a database update indicator
   const dbUpdateIndicator = document.createElement('div');
@@ -1438,6 +1448,28 @@ function toggleZoomOnSelect() {
   }
   
   console.log(`Zoom on select ${zoomOnSelect ? 'enabled' : 'disabled'}`);
+}
+
+// Toggle help card visibility
+function toggleHelpCard() {
+  showHelpCard = !showHelpCard;
+  
+  // Get the help card element
+  const helpCard = document.getElementById('link-hint');
+  
+  // Toggle visibility
+  if (helpCard) {
+    helpCard.style.display = showHelpCard ? 'block' : 'none';
+  }
+  
+  // Update the button appearance
+  const toggleButton = document.getElementById('toggle-help-card');
+  if (toggleButton) {
+    toggleButton.textContent = `Help Card: ${showHelpCard ? 'ON' : 'OFF'}`;
+    toggleButton.style.backgroundColor = showHelpCard ? '#3388ff' : '#525252'; // Blue when on, gray when off
+  }
+  
+  console.log(`Help card ${showHelpCard ? 'shown' : 'hidden'}`);
 }
 
 // Function to check if the database file has been modified
