@@ -35,9 +35,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize draggable windows
   windowManager.initializeDraggableWindows();
   
-  // Register event handlers for communication between modules
-  nodeInteractions.setupSelectionPanelListeners();
-  
   // Initialize graph
   const graphInstance = graph.initGraph();
   
@@ -45,17 +42,18 @@ document.addEventListener('DOMContentLoaded', () => {
   graph.loadData().then(() => {
     // Initialize memory domains panel after data is loaded
     console.log('Data loaded, updating memory domains panel');
-    // Ensure all domains are collected from the graph data
-    domainManagement.collectAllDomains();
+    // The updateMemoryDomainsPanel function now calls collectAllDomains internally
     domainManagement.updateMemoryDomainsPanel();
     
-    // Initialize domain legend as draggable if it was created
-    const domainLegend = document.getElementById('domain-legend');
-    if (domainLegend && !domainLegend.draggableInitialized) {
-      windowManager.makeDraggable('domain-legend', {
-        // No custom controls needed, it already has a close button
-      });
-    }
+    // Initialize domain legend as draggable if it was created (with a delay to ensure it's created)
+    setTimeout(() => {
+      const domainLegend = document.getElementById('domain-legend');
+      if (domainLegend && !domainLegend.draggableInitialized) {
+        windowManager.makeDraggable('domain-legend', {
+          // No custom controls needed, it already has a close button
+        });
+      }
+    }, 500);
   }).catch(error => {
     console.error('Error loading data:', error);
     // Initialize memory domains panel even if data loading fails

@@ -271,6 +271,28 @@ function createDomainSubmenu(node) {
   const submenu = document.createElement('div');
   submenu.className = 'context-submenu';
   
+  // Add checkbox for pruning cross-domain edges
+  const pruneEdgesContainer = document.createElement('div');
+  pruneEdgesContainer.style.padding = '8px 12px';
+  pruneEdgesContainer.style.marginBottom = '8px';
+  pruneEdgesContainer.style.borderBottom = '1px solid rgba(100, 100, 255, 0.2)';
+  
+  const pruneEdgesCheckbox = document.createElement('input');
+  pruneEdgesCheckbox.type = 'checkbox';
+  pruneEdgesCheckbox.id = 'context-prune-edges-checkbox';
+  pruneEdgesCheckbox.style.marginRight = '8px';
+  
+  const pruneEdgesLabel = document.createElement('label');
+  pruneEdgesLabel.htmlFor = 'context-prune-edges-checkbox';
+  pruneEdgesLabel.textContent = 'Prune cross-domain edges';
+  pruneEdgesLabel.style.fontSize = '12px';
+  pruneEdgesLabel.style.cursor = 'pointer';
+  pruneEdgesLabel.style.userSelect = 'none';
+  
+  pruneEdgesContainer.appendChild(pruneEdgesCheckbox);
+  pruneEdgesContainer.appendChild(pruneEdgesLabel);
+  submenu.appendChild(pruneEdgesContainer);
+  
   // Get domains from store or global
   const domains = store.get('allDomains') || window.allDomains || [];
   
@@ -288,8 +310,9 @@ function createDomainSubmenu(node) {
     if (node.domain === domain) continue;
     
     const item = createMenuItem(domain, () => {
+      const pruneEdges = pruneEdgesCheckbox.checked;
       hideContextMenu();
-      handleChangeDomain(node, domain);
+      handleChangeDomain(node, domain, pruneEdges);
     });
     
     // Add color indicator if available

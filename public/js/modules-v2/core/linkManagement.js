@@ -321,20 +321,17 @@ export function handleChangeStrength(link, newStrength) {
   const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
   const targetId = typeof link.target === 'object' ? link.target.id : link.target;
   
-  // Prepare the update data
-  const updateData = {
-    source_id: sourceId,
-    target_id: targetId,
-    strength: newStrength
-  };
-  
   // Update via API
-  fetch('/api/edges/update', {
+  fetch('/api/edges/update-strength', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(updateData)
+    body: JSON.stringify({
+      source: sourceId,
+      target: targetId,
+      newStrength: newStrength
+    })
   })
   .then(response => response.json())
   .then(result => {
@@ -393,20 +390,17 @@ export function handleChangeLinkType(link, newType) {
   const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
   const targetId = typeof link.target === 'object' ? link.target.id : link.target;
   
-  // Prepare the update data
-  const updateData = {
-    source_id: sourceId,
-    target_id: targetId,
-    type: newType
-  };
-  
   // Update via API
-  fetch('/api/edges/update', {
+  fetch('/api/edges/update-type', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(updateData)
+    body: JSON.stringify({
+      source: sourceId,
+      target: targetId,
+      newType: newType
+    })
   })
   .then(response => response.json())
   .then(result => {

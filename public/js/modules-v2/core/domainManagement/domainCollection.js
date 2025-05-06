@@ -7,27 +7,60 @@
 import store from '../../state/store.js';
 
 /**
- * Collect all unique domains from the graph data
- * @returns {Array} - Array of domain names
+ * Collect all domains from the API and from graph data
+ * @returns {Promise<Array>} - Promise resolving to array of domain names
  */
 export function collectAllDomains() {
-  const domains = new Set();
-  const { graphData } = store.getState();
-  
-  if (graphData && graphData.nodes) {
-    graphData.nodes.forEach(node => {
-      if (node.domain) {
-        domains.add(node.domain);
+  // Fetch domains from the API
+  return fetch('/api/domains')
+    .then(response => response.json())
+    .then(domainsData => {
+      // Extract domain IDs 
+      const apiDomains = domainsData.map(domain => domain.id);
+      console.log('Domains from API:', apiDomains);
+      
+      // Also collect domains from the graph data to ensure we include any that might not be in the API yet
+      const domains = new Set(apiDomains);
+      const { graphData } = store.getState();
+      
+      if (graphData && graphData.nodes) {
+        graphData.nodes.forEach(node => {
+          if (node.domain) {
+            domains.add(node.domain);
+          }
+        });
       }
+      
+      const domainArray = Array.from(domains).sort();
+      
+      // Update state
+      store.set('allDomains', domainArray);
+      console.log('All domains collected:', domainArray);
+      
+      return domainArray;
+    })
+    .catch(error => {
+      console.error('Error fetching domains from API:', error);
+      
+      // Fall back to collecting from graph data only
+      const domains = new Set();
+      const { graphData } = store.getState();
+      
+      if (graphData && graphData.nodes) {
+        graphData.nodes.forEach(node => {
+          if (node.domain) {
+            domains.add(node.domain);
+          }
+        });
+      }
+      
+      const domainArray = Array.from(domains).sort();
+      
+      // Update state
+      store.set('allDomains', domainArray);
+      
+      return domainArray;
     });
-  }
-  
-  const domainArray = Array.from(domains).sort();
-  
-  // Update state
-  store.set('allDomains', domainArray);
-  
-  return domainArray;
 }
 
 /**

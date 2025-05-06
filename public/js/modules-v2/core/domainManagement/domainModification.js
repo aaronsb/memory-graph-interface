@@ -12,9 +12,10 @@ import { showDomainEditDialog } from './ui.js';
  * Change a node's domain
  * @param {Object} node - The node to change
  * @param {string} newDomain - The new domain
+ * @param {boolean} pruneEdges - Whether to prune edges to nodes in different domains
  */
-export function handleChangeDomain(node, newDomain) {
-  console.log(`Changing domain of node ${node.id} to ${newDomain}`);
+export function handleChangeDomain(node, newDomain, pruneEdges = false) {
+  console.log(`Changing domain of node ${node.id} to ${newDomain} (pruneEdges: ${pruneEdges})`);
   
   // Skip if domain is already set to the new value
   if (node.domain === newDomain) {
@@ -24,8 +25,9 @@ export function handleChangeDomain(node, newDomain) {
   
   // Prepare update data
   const updateData = {
-    node_id: node.id,
-    domain: newDomain
+    nodeId: node.id,
+    domain: newDomain,
+    pruneEdges: pruneEdges
   };
   
   // Update via API
@@ -77,12 +79,10 @@ export function handleChangeDomain(node, newDomain) {
       }
     } else {
       console.error('Failed to update domain:', result.error);
-      alert('Failed to update domain: ' + (result.error || 'Unknown error'));
     }
   })
   .catch(error => {
     console.error('Error updating domain:', error);
-    alert('Error updating domain: ' + error);
   });
 }
 
@@ -94,22 +94,62 @@ export function handleCreateDomain() {
     ui.showDomainEditDialog('New Domain', (newDomain) => {
       console.log(`Creating new domain: ${newDomain}`);
       
-      // Import color management to assign color
-      import('./colorManagement.js').then(colors => {
-        // Assign a color to the new domain
-        colors.assignDomainColor(newDomain);
-        
-        // Add the domain to the list
-        const allDomains = store.get('allDomains') || [];
-        if (!allDomains.includes(newDomain)) {
-          allDomains.push(newDomain);
-          allDomains.sort();
-          store.set('allDomains', allDomains);
+      // Create domain in database first
+      fetch('/api/domains/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ domain: newDomain })
+      })
+      .then(response => response.json())
+      .then(result => {
+        if (result.success) {
+          console.log('Domain created successfully in database');
+          
+          // Import color management to assign color
+          import('./colorManagement.js').then(colors => {
+            // Assign a color to the new domain
+            colors.assignDomainColor(newDomain);
+            
+            // Add the domain to the list
+            const allDomains = store.get('allDomains') || [];
+            if (!allDomains.includes(newDomain)) {
+              allDomains.push(newDomain);
+              allDomains.sort();
+              store.set('allDomains', allDomains);
+            }
+            
+            // Update the panel
+            import('./ui.js').then(ui => {
+              ui.updateMemoryDomainsPanel();
+            });
+          });
+        } else {
+          console.error('Failed to create domain in database:', result.error);
         }
+      })
+      .catch(error => {
+        // If the endpoint doesn't exist yet, still create the domain in the UI
+        console.warn('Error creating domain in database (endpoint may not exist yet):', error);
         
-        // Update the panel
-        import('./ui.js').then(ui => {
-          ui.updateMemoryDomainsPanel();
+        // Import color management to assign color
+        import('./colorManagement.js').then(colors => {
+          // Assign a color to the new domain
+          colors.assignDomainColor(newDomain);
+          
+          // Add the domain to the list
+          const allDomains = store.get('allDomains') || [];
+          if (!allDomains.includes(newDomain)) {
+            allDomains.push(newDomain);
+            allDomains.sort();
+            store.set('allDomains', allDomains);
+          }
+          
+          // Update the panel
+          import('./ui.js').then(ui => {
+            ui.updateMemoryDomainsPanel();
+          });
         });
       });
     });
@@ -128,7 +168,7 @@ export function handleRenameDomain(oldDomain) {
       // Check if the new domain already exists
       const allDomains = store.get('allDomains') || [];
       if (allDomains.includes(newDomain) && newDomain !== oldDomain) {
-        alert(`Domain "${newDomain}" already exists. Please choose a different name.`);
+        console.warn(`Domain "${newDomain}" already exists. Please choose a different name.`);
         return;
       }
       
@@ -141,10 +181,9 @@ export function handleRenameDomain(oldDomain) {
         return;
       }
       
-      // Show confirmation dialog
-      if (!confirm(`Are you sure you want to rename domain "${oldDomain}" to "${newDomain}"? This will update ${nodesToUpdate.length} nodes.`)) {
-        return;
-      }
+      // Log instead of showing confirmation dialog
+      console.log(`Renaming domain "${oldDomain}" to "${newDomain}" (updating ${nodesToUpdate.length} nodes)`);
+      // No confirmation needed, proceed directly
       
       // Update each node's domain
       let updatedCount = 0;
@@ -227,8 +266,8 @@ export function handleRenameDomain(oldDomain) {
               ui.updateMemoryDomainsPanel();
             });
             
-            // Show result
-            alert(`Updated domain for ${updatedCount} nodes, ${errorCount} errors`);
+            // Log result instead of showing alert
+            console.log(`Updated domain for ${updatedCount} nodes, ${errorCount} errors`);
           });
         });
     });
@@ -245,14 +284,13 @@ export function handleDeleteEmptyDomain(domain) {
   const nodeCount = domainCounts.get(domain) || 0;
   
   if (nodeCount > 0) {
-    alert(`Cannot delete domain "${domain}" because it contains ${nodeCount} nodes. Move the nodes to another domain first.`);
+    console.warn(`Cannot delete domain "${domain}" because it contains ${nodeCount} nodes. Move the nodes to another domain first.`);
     return;
   }
   
-  // Show confirmation dialog
-  if (!confirm(`Are you sure you want to delete the empty domain "${domain}"?`)) {
-    return;
-  }
+  // Log instead of confirmation dialog
+  console.log(`Deleting empty domain "${domain}"`);
+  // No confirmation needed, proceed directly
   
   // Remove the domain from the list
   const allDomains = store.get('allDomains') || [];

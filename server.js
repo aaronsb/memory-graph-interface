@@ -224,7 +224,16 @@ app.post('/api/nodes/update-domain', (req, res) => {
   console.log('==== [API] POST /api/nodes/update-domain request received ====');
   console.log('[API] Request body:', JSON.stringify(req.body, null, 2));
   
-  const { nodeId, domain } = req.body;
+  // Extract nodeId from either nodeId or node_id
+  const nodeId = req.body.nodeId || req.body.node_id;
+  const domain = req.body.domain;
+  const pruneEdges = req.body.pruneEdges === true;
+  
+  console.log('[API] Extracted parameters:', {
+    nodeId,
+    domain,
+    pruneEdges
+  });
   
   // Validate required fields
   if (!nodeId || !domain) {
@@ -234,74 +243,186 @@ app.post('/api/nodes/update-domain', (req, res) => {
     return res.status(400).json({ error: 'Missing required fields' });
   }
   
-  // Check if node exists
-  const checkNodeQuery = `SELECT id, domain FROM MEMORY_NODES WHERE id = ?`;
+  // First, check if the domain exists in DOMAINS
+  const checkDomainQuery = `SELECT id FROM DOMAINS WHERE id = ?`;
   
   executeWithRetry((db, callback) => {
-    db.get(checkNodeQuery, [nodeId], callback);
-  }, 3, (err, node) => {
-    if (err) {
-      console.error('[API] Error checking node:', err.message);
-      return res.status(500).json({ error: err.message });
+    db.get(checkDomainQuery, [domain], callback);
+  }, 3, (domainErr, existingDomain) => {
+    // If there's an error checking the domain, or the domain doesn't exist,
+    // we should create it first
+    if (domainErr) {
+      console.warn('[API] Warning: Error checking domain existence:', domainErr.message);
+      console.warn('[API] Will attempt to update node domain anyway');
+    } else if (!existingDomain) {
+      console.warn(`[API] Warning: Domain '${domain}' doesn't exist in DOMAINS`);
+      console.warn('[API] Will create domain and then update node');
+      
+      // Create the domain first
+      const createDomainTimestamp = new Date().toISOString();
+      const createDomainQuery = `
+        INSERT INTO DOMAINS (id, name, description, created, lastAccess)
+        VALUES (?, ?, ?, ?, ?)
+      `;
+      
+      executeWithRetry((db, callback) => {
+        db.run(createDomainQuery, [domain, domain, '', createDomainTimestamp, createDomainTimestamp], function(err) {
+          if (err) {
+            console.warn('[API] Warning: Could not create domain:', err.message);
+          } else {
+            console.log(`[API] Created new domain '${domain}' on-the-fly`);
+          }
+          callback(null);
+        });
+      }, 3);
     }
     
-    if (!node) {
-      console.log('[API] Error: Node does not exist');
-      return res.status(404).json({ error: 'Node not found' });
-    }
-    
-    // No need to update if domain is the same
-    if (node.domain === domain) {
-      console.log('[API] Node already has the requested domain, no update needed');
-      return res.json({ success: true, changed: false });
-    }
-    
-    // Update the node's domain
-    const updateQuery = `UPDATE MEMORY_NODES SET domain = ? WHERE id = ?`;
+    // Check if node exists
+    const checkNodeQuery = `SELECT id, domain FROM MEMORY_NODES WHERE id = ?`;
     
     executeWithRetry((db, callback) => {
-      db.run(updateQuery, [domain, nodeId], function(err) {
-        if (err) {
-          callback(err);
-        } else {
-          callback(null, { changes: this.changes });
-        }
-      });
-    }, 3, (err, result) => {
+      db.get(checkNodeQuery, [nodeId], callback);
+    }, 3, (err, node) => {
       if (err) {
-        console.error('[API] Error updating node domain:', err.message);
+        console.error('[API] Error checking node:', err.message);
         return res.status(500).json({ error: err.message });
       }
       
-      console.log(`[API] Updated domain for node ${nodeId} from ${node.domain} to ${domain}`);
-      console.log('  Changes:', result.changes);
+      if (!node) {
+        console.log('[API] Error: Node does not exist');
+        return res.status(404).json({ error: 'Node not found' });
+      }
       
-      // Also update all edges for this node to the new domain
-      const updateEdgesQuery = `UPDATE MEMORY_EDGES SET domain = ? WHERE source = ?`;
+      // No need to update if domain is the same
+      if (node.domain === domain) {
+        console.log('[API] Node already has the requested domain, no update needed');
+        return res.json({ success: true, changed: false });
+      }
+      
+      // Update the node's domain
+      const updateQuery = `UPDATE MEMORY_NODES SET domain = ? WHERE id = ?`;
       
       executeWithRetry((db, callback) => {
-        db.run(updateEdgesQuery, [domain, nodeId], function(err) {
+        db.run(updateQuery, [domain, nodeId], function(err) {
           if (err) {
             callback(err);
           } else {
             callback(null, { changes: this.changes });
           }
         });
-      }, 3, (edgeErr, edgeResult) => {
-        if (edgeErr) {
-          console.error('[API] Error updating edges domain:', edgeErr.message);
-          // We still consider the operation successful even if edge updates fail
-        } else {
-          console.log(`[API] Updated domain for ${edgeResult.changes} edges connected to node ${nodeId}`);
+      }, 3, (err, result) => {
+        if (err) {
+          console.error('[API] Error updating node domain:', err.message);
+          return res.status(500).json({ error: err.message });
         }
         
-        res.json({ 
-          success: true, 
-          changed: true, 
-          nodeId,
-          oldDomain: node.domain,
-          newDomain: domain
-        });
+        console.log(`[API] Updated domain for node ${nodeId} from ${node.domain} to ${domain}`);
+        console.log('  Changes:', result.changes);
+        
+        // If pruneEdges is true, delete edges to nodes in different domains
+        if (pruneEdges) {
+          console.log(`[API] Pruning edges for node ${nodeId} to nodes in different domains`);
+          
+          // Get all nodes in other domains
+          const getNodesInOtherDomainsQuery = `
+            SELECT id FROM MEMORY_NODES 
+            WHERE domain != ? AND id != ?
+          `;
+          
+          executeWithRetry((db, callback) => {
+            db.all(getNodesInOtherDomainsQuery, [domain, nodeId], callback);
+          }, 3, (nodesErr, otherDomainNodes) => {
+            if (nodesErr) {
+              console.error('[API] Error getting nodes in other domains:', nodesErr.message);
+              // Continue without pruning
+              return res.json({ 
+                success: true, 
+                changed: true, 
+                nodeId,
+                oldDomain: node.domain,
+                newDomain: domain,
+                edgesPruned: false,
+                pruneError: nodesErr.message
+              });
+            }
+            
+            // If no nodes in other domains, no need to prune
+            if (otherDomainNodes.length === 0) {
+              console.log('[API] No nodes in other domains, no pruning needed');
+              return res.json({ 
+                success: true, 
+                changed: true, 
+                nodeId,
+                oldDomain: node.domain,
+                newDomain: domain,
+                edgesPruned: false
+              });
+            }
+            
+            // Get the IDs of nodes in other domains
+            const otherNodeIds = otherDomainNodes.map(n => n.id);
+            
+            // Prepare placeholders for the SQL query
+            const placeholders = otherNodeIds.map(() => '?').join(', ');
+            
+            // Delete edges where either source or target is the node being updated
+            // and the other end is a node in a different domain
+            const deleteEdgesQuery = `
+              DELETE FROM MEMORY_EDGES 
+              WHERE (source = ? AND target IN (${placeholders}))
+                 OR (target = ? AND source IN (${placeholders}))
+            `;
+            
+            // Prepare parameters for the query
+            const params = [nodeId, ...otherNodeIds, nodeId, ...otherNodeIds];
+            
+            executeWithRetry((db, callback) => {
+              db.run(deleteEdgesQuery, params, function(err) {
+                if (err) {
+                  callback(err);
+                } else {
+                  callback(null, { changes: this.changes });
+                }
+              });
+            }, 3, (deleteErr, deleteResult) => {
+              if (deleteErr) {
+                console.error('[API] Error pruning edges:', deleteErr.message);
+                return res.json({ 
+                  success: true, 
+                  changed: true, 
+                  nodeId,
+                  oldDomain: node.domain,
+                  newDomain: domain,
+                  edgesPruned: false,
+                  pruneError: deleteErr.message
+                });
+              }
+              
+              console.log(`[API] Pruned ${deleteResult.changes} edges to nodes in different domains`);
+              
+              // Success response with pruning info
+              res.json({ 
+                success: true, 
+                changed: true, 
+                nodeId,
+                oldDomain: node.domain,
+                newDomain: domain,
+                edgesPruned: true,
+                edgesPrunedCount: deleteResult.changes
+              });
+            });
+          });
+        } else {
+          // No pruning needed, return success response
+          res.json({ 
+            success: true, 
+            changed: true, 
+            nodeId,
+            oldDomain: node.domain,
+            newDomain: domain,
+            edgesPruned: false
+          });
+        }
       });
     });
   });
@@ -917,6 +1038,88 @@ app.get('/api/graph/memory', (req, res) => {
   .catch(err => {
     console.error('Error fetching graph data:', err.message);
     res.status(500).json({ error: err.message });
+  });
+});
+
+// API endpoint to get all domains
+app.get('/api/domains', (req, res) => {
+  console.log('==== [API] GET /api/domains request received ====');
+  
+  const query = `
+    SELECT id, name, description, created, lastAccess
+    FROM DOMAINS
+    ORDER BY name ASC
+  `;
+  
+  executeWithRetry((db, callback) => {
+    db.all(query, [], callback);
+  }, 3, (err, domains) => {
+    if (err) {
+      console.error('[API] Error fetching domains:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    
+    console.log(`[API] Found ${domains.length} domains`);
+    res.json(domains);
+  });
+});
+
+// API endpoint to create a new domain
+app.post('/api/domains/create', (req, res) => {
+  console.log('==== [API] POST /api/domains/create request received ====');
+  console.log('[API] Request body:', JSON.stringify(req.body, null, 2));
+  
+  const { domain } = req.body;
+  
+  // Validate required fields
+  if (!domain) {
+    console.log('[API] POST /api/domains/create error: Missing domain name');
+    return res.status(400).json({ error: 'Missing domain name' });
+  }
+  
+  // Check if domain exists in DOMAINS table, create if not
+  const checkDomainQuery = `
+    SELECT id FROM DOMAINS WHERE id = ?
+  `;
+  
+  executeWithRetry((db, callback) => {
+    db.get(checkDomainQuery, [domain], callback);
+  }, 3, (err, existingDomain) => {
+    if (err) {
+      console.error('[API] Error checking domain:', err.message);
+      // Continue anyway, the error might be transient
+    }
+    
+    // If domain already exists, return success
+    if (existingDomain) {
+      console.log(`[API] Domain '${domain}' already exists`);
+      return res.json({ success: true, created: false, message: 'Domain already exists' });
+    }
+    
+    // Create the domain
+    const timestamp = new Date().toISOString();
+    const insertQuery = `
+      INSERT INTO DOMAINS (id, name, description, created, lastAccess)
+      VALUES (?, ?, ?, ?, ?)
+    `;
+    
+    executeWithRetry((db, callback) => {
+      db.run(insertQuery, [domain, domain, '', timestamp, timestamp], function(err) {
+        if (err) {
+          callback(err);
+        } else {
+          callback(null, { changes: this.changes });
+        }
+      });
+    }, 3, (insertErr, result) => {
+      if (insertErr) {
+        console.error('[API] Error creating domain:', insertErr.message);
+        return res.status(500).json({ error: insertErr.message });
+      }
+      
+      console.log(`[API] Created domain '${domain}' successfully`);
+      res.json({ success: true, created: true, domain });
+    });
   });
 });
 

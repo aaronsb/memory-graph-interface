@@ -52,8 +52,8 @@ export function handleSelectAllNodesInDomain(domain) {
     nodeInteractions.showSelectionPanel();
     nodeInteractions.updateSelectionPanel();
     
-    // Show feedback to the user
-    alert(`Added ${nodesInDomain.length} nodes from domain "${domain}" to selection`);
+    // Log feedback instead of showing an alert
+    console.log(`Added ${nodesInDomain.length} nodes from domain "${domain}" to selection`);
   });
 }
 
