@@ -4,6 +4,7 @@ let bloomPass;
 let bloomEnabled = true;
 let showSummariesOnNodes = false; // Track if summaries should be shown on nodes
 let showEdgeLabels = true; // Track if edge labels should be shown
+let zoomOnSelect = true; // Track if camera should zoom to selected node
 let highlightNodes = new Set();
 let highlightLinks = new Set();
 let hoverNode = null;
@@ -144,6 +145,14 @@ document.addEventListener('DOMContentLoaded', () => {
   styleButton(domainLegendToggle, true);
   domainLegendToggle.addEventListener('click', toggleDomainLegend);
   controls.appendChild(domainLegendToggle);
+  
+  // Add a toggle button for zoom on select
+  const zoomToggle = document.createElement('button');
+  zoomToggle.id = 'toggle-zoom';
+  zoomToggle.textContent = 'Zoom on Select: ON';
+  styleButton(zoomToggle, true);
+  zoomToggle.addEventListener('click', toggleZoomOnSelect);
+  controls.appendChild(zoomToggle);
   
   // Add a database update indicator
   const dbUpdateIndicator = document.createElement('div');
@@ -512,24 +521,26 @@ function initGraph() {
         }
         updateHighlight();
 
-        // Center view on node (using lookAt instead of centerAt)
-        try {
-          // Use the camera controls to look at the node
-          // Increased distance for a more zoomed-out view (4x further away)
-          const distance = 160; // Was 40, increased to zoom out
-          const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
-          
-          if (graph.cameraPosition) {
-            graph.cameraPosition(
-              { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, // new position
-              node, // lookAt
-              2000  // transition duration (slightly faster)
-            );
-          } else {
-            console.warn('graph.cameraPosition not available, cannot center view');
+        // Center view on node only if zoom on select is enabled
+        if (zoomOnSelect) {
+          try {
+            // Use the camera controls to look at the node
+            // Increased distance for a more zoomed-out view (4x further away)
+            const distance = 160; // Was 40, increased to zoom out
+            const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
+            
+            if (graph.cameraPosition) {
+              graph.cameraPosition(
+                { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, // new position
+                node, // lookAt
+                2000  // transition duration (slightly faster)
+              );
+            } else {
+              console.warn('graph.cameraPosition not available, cannot center view');
+            }
+          } catch (err) {
+            console.error('Error centering view on node:', err);
           }
-        } catch (err) {
-          console.error('Error centering view on node:', err);
         }
       }
     })
@@ -1314,6 +1325,20 @@ function toggleDomainLegend() {
   }
   
   console.log(`Domain legend ${isVisible ? 'hidden' : 'shown'}`);
+}
+
+// Toggle zoom on select behavior
+function toggleZoomOnSelect() {
+  zoomOnSelect = !zoomOnSelect;
+  
+  // Update the button appearance
+  const toggleButton = document.getElementById('toggle-zoom');
+  if (toggleButton) {
+    toggleButton.textContent = `Zoom on Select: ${zoomOnSelect ? 'ON' : 'OFF'}`;
+    toggleButton.style.backgroundColor = zoomOnSelect ? '#3388ff' : '#525252'; // Blue when on, gray when off
+  }
+  
+  console.log(`Zoom on select ${zoomOnSelect ? 'enabled' : 'disabled'}`);
 }
 
 // Function to check if the database file has been modified
