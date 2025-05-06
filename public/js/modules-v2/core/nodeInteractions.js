@@ -16,8 +16,18 @@ import * as eventBus from '../utils/eventBus.js';
 export function handleViewNodeDetails(node) {
   const currentSelectedNode = store.get('selectedNode');
   
-  // Check if the node is already selected
-  if (currentSelectedNode && currentSelectedNode.id === node.id) {
+  // Add check to ensure we have a valid node object
+  if (!node) {
+    console.log('No node provided to handleViewNodeDetails');
+    return;
+  }
+  
+  // Check if the node is already selected by comparing IDs
+  const isSameNode = currentSelectedNode && 
+                     (currentSelectedNode.id === node.id || 
+                      currentSelectedNode === node.id);
+  
+  if (isSameNode) {
     console.log('Deselecting node:', node.id);
     
     // Clear selection
