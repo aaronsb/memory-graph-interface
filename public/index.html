@@ -98,6 +98,15 @@
       background-color: rgba(255, 100, 100, 0.2);
     }
     
+    /* Delete button styles */
+    .delete-button {
+      color: #ff6b6b;
+    }
+    
+    .delete-button:hover {
+      background-color: rgba(255, 70, 70, 0.2);
+    }
+    
     /* Selection count badge */
     .selection-count {
       background-color: rgba(100, 180, 100, 0.5);
@@ -376,7 +385,6 @@
   <div id="info-panel">
     <h3>
       <span id="node-id">Node Details</span>
-      <span class="copy-icon" id="copy-to-clipboard" title="Copy to clipboard">📋</span>
     </h3>
     <div id="node-tags"></div>
     <div id="node-content" class="content"></div>
@@ -387,13 +395,12 @@
     <h3>
       <span id="selection-panel-title">Selected Nodes</span>
       <span class="selection-count" id="selection-count">0</span>
-      <span class="copy-icon" id="selection-copy" title="Copy to clipboard">📋</span>
-      <span class="close-icon" id="selection-close" title="Close panel">✖</span>
     </h3>
     <div id="selection-list"></div>
     <div id="selection-actions">
-      <button id="clear-selection-btn">Clear Selection</button>
-      <button id="link-selected-btn">Link All Selected</button>
+      <button id="clear-selection-btn">Clear</button>
+      <button id="link-selected-btn">Link</button>
+      <button id="change-domain-btn">Domain</button>
     </div>
   </div>
   

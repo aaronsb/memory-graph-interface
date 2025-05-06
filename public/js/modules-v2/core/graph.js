@@ -9,7 +9,7 @@ import { getNodeLabel, getNodeColor, getLinkColor, updateHighlight, updateCombin
 import { showContextMenu, hideContextMenu } from '../ui/contextMenu.js';
 import { handleViewNodeDetails, handleMultiSelectNode, handleDeleteNode, showCustomConfirmDialog } from './nodeInteractions.js';
 import { toggleLinkCreationMode, handleCreateLink, handleDeleteLink } from './linkManagement.js';
-import { collectAllDomains, updateDomainColorLegend } from './domainManagement.js';
+import { collectAllDomains, updateMemoryDomainsPanel } from './domainManagement.js';
 import * as eventBus from '../utils/eventBus.js';
 
 /**
@@ -242,6 +242,15 @@ export function initGraph() {
     .onNodeClick((node, event) => {
       const { multiSelectActive } = store.getState();
       
+      // Ensure node object is valid
+      if (!node) {
+        console.log('No valid node object provided to onNodeClick');
+        return;
+      }
+      
+      // Log the node for debugging
+      console.log('Node clicked:', node.id);
+      
       // Check if shift key is pressed or multi-select mode is active
       if (event.shiftKey || multiSelectActive) {
         handleMultiSelectNode(node);
@@ -288,7 +297,7 @@ export function initGraph() {
         return;
       }
       
-      // Default node click behavior - show node details
+      // Default node click behavior - show node details or deselect if already selected
       handleViewNodeDetails(node);
     })
     

@@ -38,11 +38,11 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Load initial data
   graph.loadData().then(() => {
-    // Initialize domain color legend after data is loaded
-    console.log('Data loaded, updating domain color legend');
+    // Initialize memory domains panel after data is loaded
+    console.log('Data loaded, updating memory domains panel');
     // Ensure all domains are collected from the graph data
     domainManagement.collectAllDomains();
-    domainManagement.updateDomainColorLegend();
+    domainManagement.updateMemoryDomainsPanel();
     
     // Initialize domain legend as draggable if it was created
     const domainLegend = document.getElementById('domain-legend');
@@ -53,8 +53,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }).catch(error => {
     console.error('Error loading data:', error);
-    // Initialize domain color legend even if data loading fails
-    domainManagement.updateDomainColorLegend();
+    // Initialize memory domains panel even if data loading fails
+    domainManagement.updateMemoryDomainsPanel();
   });
   
   // Fetch link types

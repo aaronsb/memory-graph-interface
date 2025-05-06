@@ -143,7 +143,7 @@ export function toggleHelpCard() {
 /**
  * Toggle domain legend visibility
  */
-export function toggleDomainLegend() {
+export function toggleMemoryDomainsPanel() {
   // Get the domain legend element
   const domainLegend = document.getElementById('domain-legend');
   
@@ -156,11 +156,11 @@ export function toggleDomainLegend() {
   // Update the button appearance
   const toggleButton = document.getElementById('toggle-domain-legend');
   if (toggleButton) {
-    toggleButton.textContent = `Domain Legend: ${!isVisible ? 'ON' : 'OFF'}`;
+    toggleButton.textContent = `Memory Domains: ${!isVisible ? 'ON' : 'OFF'}`;
     toggleButton.style.backgroundColor = !isVisible ? '#3388ff' : '#525252';
   }
   
-  console.log(`Domain legend ${!isVisible ? 'shown' : 'hidden'}`);
+  console.log(`Memory Domains panel ${!isVisible ? 'shown' : 'hidden'}`);
 }
 
 /**
@@ -210,6 +210,6 @@ export default {
   toggleEdgeLabels,
   toggleZoomOnSelect,
   toggleHelpCard,
-  toggleDomainLegend,
+  toggleMemoryDomainsPanel,
   setupUIEventListeners
 };

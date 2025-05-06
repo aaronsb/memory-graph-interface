@@ -136,7 +136,7 @@ function populateNodeContextMenu(contextMenu, node) {
   // Add tag option
   const addTag = createMenuItem('Add Tag', () => {
     hideContextMenu();
-    handleShowTagInput(node);
+    handleShowTagInput(node, false);
   });
   contextMenu.appendChild(addTag);
   

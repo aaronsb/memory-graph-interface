@@ -13,7 +13,10 @@ const EVENTS = {
   CONTENT_COPIED: 'content:copied',
   NODE_EDIT_TAGS: 'node:editTags',
   NODE_SELECTION_CLEARED: 'node:selectionCleared',
-  NODE_SELECTION_CHANGED: 'node:selectionChanged'
+  NODE_SELECTION_CHANGED: 'node:selectionChanged',
+  NODE_DELETE: 'node:delete',
+  NODES_DELETE_SELECTED: 'nodes:deleteSelected',
+  NODES_CHANGE_DOMAIN: 'nodes:changeDomain'
 };
 
 // Register event handlers
@@ -21,7 +24,7 @@ function setupEventListeners() {
   // Listen for domain legend creation events
   eventBus.on('domainLegend:created', (legendId) => {
     if (document.getElementById(legendId)) {
-      makeDraggable(legendId, { addHeader: false });
+      makeDraggable(legendId, { controls: [] });
     }
   });
 }
@@ -329,6 +332,54 @@ const createControlHandlers = {
     };
   },
   
+  copySelectionContent: () => {
+    return (win) => {
+      // Get the list of selected nodes
+      const selectedList = document.querySelectorAll('#selection-list .selection-item-text');
+      
+      if (selectedList && selectedList.length > 0) {
+        // Create text with all selected node IDs
+        const text = Array.from(selectedList)
+          .map(item => item.textContent)
+          .join('\n');
+        
+        navigator.clipboard.writeText(text)
+          .then(() => {
+            console.log('Selection copied to clipboard');
+            // Show feedback
+            const copyIcon = win.querySelector('.window-control');
+            if (copyIcon) {
+              const originalText = copyIcon.textContent;
+              copyIcon.textContent = '✓';
+              setTimeout(() => {
+                copyIcon.textContent = originalText;
+              }, 1000);
+            }
+            
+            // Emit content copied event
+            eventBus.emit(EVENTS.CONTENT_COPIED, { text });
+          })
+          .catch(err => {
+            console.error('Failed to copy selection to clipboard:', err);
+          });
+      }
+    };
+  },
+  
+  deleteNode: () => {
+    return () => {
+      // Emit an event to delete the node (to be handled by nodeInteractions)
+      eventBus.emit(EVENTS.NODE_DELETE, { node: null });
+    };
+  },
+  
+  deleteSelectedNodes: () => {
+    return () => {
+      // Emit an event to delete selected nodes
+      eventBus.emit(EVENTS.NODES_DELETE_SELECTED, {});
+    };
+  },
+  
   editTags: () => {
     return () => {
       // Emit an event to request tag editing
@@ -344,6 +395,15 @@ const createControlHandlers = {
       // Emit an event that the panel was closed and selection cleared
       eventBus.emit(EVENTS.WINDOW_CLOSED, { windowId: win.id });
       eventBus.emit(EVENTS.NODE_SELECTION_CLEARED, {});
+    };
+  },
+  
+  closeSelectionPanel: () => {
+    return (win) => {
+      win.style.display = 'none';
+      
+      // Emit an event that the panel was closed
+      eventBus.emit(EVENTS.WINDOW_CLOSED, { windowId: win.id });
     };
   }
 };
@@ -361,9 +421,10 @@ export function initializeDraggableWindows() {
         onClick: createControlHandlers.copyNodeContent()
       },
       {
-        icon: '✏️',
-        title: 'Edit tags',
-        onClick: createControlHandlers.editTags()
+        icon: '🗑️',
+        title: 'Delete node',
+        className: 'delete-button',
+        onClick: createControlHandlers.deleteNode()
       },
       {
         icon: '✖',
@@ -376,6 +437,25 @@ export function initializeDraggableWindows() {
   
   // Selection panel
   makeDraggable('selection-panel', {
+    controls: [
+      { 
+        icon: '📋', 
+        title: 'Copy selected nodes to clipboard',
+        onClick: createControlHandlers.copySelectionContent()
+      },
+      {
+        icon: '🗑️',
+        title: 'Delete selected nodes',
+        className: 'delete-button',
+        onClick: createControlHandlers.deleteSelectedNodes()
+      },
+      {
+        icon: '✖',
+        title: 'Close',
+        className: 'close-button',
+        onClick: createControlHandlers.closeSelectionPanel()
+      }
+    ],
     defaultPosition: { x: 10, y: 10 }
   });
   
@@ -383,7 +463,7 @@ export function initializeDraggableWindows() {
   const domainLegend = document.getElementById('domain-legend');
   if (domainLegend) {
     makeDraggable('domain-legend', {
-      // No custom controls needed, it already has a close button
+      controls: [] // No custom controls needed, they are already added in the updateDomainColorLegend function
     });
   }
   
