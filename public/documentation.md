@@ -54,7 +54,8 @@ The visualization uses several visual cues to represent the data:
 1. **Node Size**: 
    - Tag nodes are larger than memory nodes
    - Tag node size is proportional to the number of associated memories
-   - Memory node size is smaller and more uniform
+   - Memory node size is proportional to the number of tags it has (up to a maximum of 5)
+   - This means nodes with more tags appear larger in the visualization, making important or well-tagged memories more visually prominent
 
 2. **Node Color**:
    - Tag nodes use a predefined color scheme based on tag name

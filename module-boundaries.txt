@@ -1,0 +1,74 @@
+# Logical Module Boundaries for app.js
+
+Based on function analysis, here are the natural module boundaries:
+
+1. **Core Graph Initialization Module**
+   - initGraph
+   - loadData
+   - processGraphData
+   - getNodeLabel
+   - getNodeColor
+   - getLinkColor
+
+2. **Node Interaction Module**
+   - showNodeInfo
+   - hideNodeInfo
+   - handleViewNodeDetails
+   - handleMultiSelectNode
+   - toggleZoomOnSelect
+
+3. **Highlighting System Module**
+   - updateCombinedHighlights
+   - updateHighlight
+   - hoverHighlightNodes/Links management
+   - selectedHighlightNodes/Links management
+
+4. **UI Effects Module**
+   - toggleBloomEffect
+   - toggleSummariesOnNodes
+   - toggleEdgeLabels
+   - toggleHelpCard
+
+5. **Context Menu Module**
+   - showContextMenu
+   - hideContextMenu
+   - populateContextMenu
+   - createDomainSubmenu
+   - createLinkTypeSubmenu
+   - createStrengthSubmenu
+
+6. **Domain Management Module**
+   - collectAllDomains
+   - handleChangeDomain
+   - updateDomainColorLegend
+   - toggleDomainLegend
+   - getCurrentPageDomains
+   - nextDomainPage
+   - prevDomainPage
+   - getDomainPaginationInfo
+
+7. **Link Management Module**
+   - handleCreateLink
+   - handleDeleteLink
+   - toggleLinkCreationMode
+   - handleChangeStrength
+   - handleChangeLinkType
+   - fetchLinkTypes
+   - handleLinkAllSelected
+   - createLinkPromise
+
+8. **Selection Panel Module**
+   - showSelectionPanel
+   - hideSelectionPanel
+   - updateSelectionPanel
+   - updateSelectionPanelPosition
+   - setupSelectionPanelListeners
+
+9. **Utility Functions Module**
+   - showCustomConfirmDialog
+   - checkDatabaseStatus
+   - startDatabaseWatcher
+   - stopDatabaseWatcher
+   - toggleDatabaseWatcher
+
+This organization groups related functions by their purpose and responsibility in the application.
