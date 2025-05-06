@@ -422,20 +422,6 @@ export function updateMemoryDomainsPanel() {
       
       createButtonContainer.appendChild(createButton);
       legend.appendChild(createButtonContainer);
-      
-      // Create toggle button if it doesn't exist
-      if (!document.getElementById('toggle-domain-legend')) {
-        const controlsContainer = document.getElementById('controls');
-        
-        if (controlsContainer) {
-          const toggleButton = document.createElement('button');
-          toggleButton.id = 'toggle-domain-legend';
-          toggleButton.textContent = 'Toggle Memory Domains';
-          toggleButton.addEventListener('click', toggleMemoryDomainsPanel);
-          
-          controlsContainer.appendChild(toggleButton);
-        }
-      }
     });
   });
 }

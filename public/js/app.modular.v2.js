@@ -14,12 +14,17 @@ import {
   controls, 
   contextMenu,
   windowManager,
+  menuBar,
   helpers 
 } from './modules-v2/index.js';
 
 // Initialize the application when the DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Memory Graph Visualizer - Initializing modular version');
+  
+  // Initialize the menu bar
+  menuBar.initMenuBar();
+  menuBar.setupMenuStateListeners();
   
   // Set up UI event listeners
   controls.setupUIEventListeners();
@@ -74,6 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
       controls,
       contextMenu,
       windowManager,
+      menuBar,
       helpers,
       getState: () => store.getState()
     };

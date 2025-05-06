@@ -69,14 +69,18 @@ export function updateSelectionPanelPosition() {
   
   if (!infoPanel || !selectionPanel) return;
   
-  // Check if the info panel is visible
-  const infoPanelVisible = infoPanel.style.display !== 'none';
+  // Only consider the info panel if it's visible and has a display style of 'block'
+  const infoPanelVisible = infoPanel.style.display === 'block';
+  const selectionPanelVisible = selectionPanel.style.display === 'block';
   
-  // If the info panel is visible, position the selection panel to its left
-  if (infoPanelVisible) {
-    selectionPanel.style.right = `${420}px`; // More than info panel width (400px) + the right padding (10px)
-  } else {
-    selectionPanel.style.right = '10px';
+  // Only update position if the selection panel is actually visible
+  if (selectionPanelVisible) {
+    // If the info panel is visible, position the selection panel to its left
+    if (infoPanelVisible) {
+      selectionPanel.style.right = `${420}px`; // More than info panel width (400px) + the right padding (10px)
+    } else {
+      selectionPanel.style.right = '10px';
+    }
   }
 }
 

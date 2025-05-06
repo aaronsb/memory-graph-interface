@@ -12,6 +12,7 @@ import * as domainManagement from './core/domainManagement.js';
 import * as controls from './ui/controls.js';
 import * as contextMenu from './ui/contextMenu.js';
 import * as windowManager from './ui/windowManager.js';
+import * as menuBar from './ui/menuBar.js';
 import * as helpers from './utils/helpers.js';
 import * as eventBus from './utils/eventBus.js';
 
@@ -25,6 +26,7 @@ export {
   controls,
   contextMenu,
   windowManager,
+  menuBar,
   helpers,
   eventBus
 };
@@ -39,6 +41,7 @@ export default {
   controls,
   contextMenu,
   windowManager,
+  menuBar,
   helpers,
   eventBus
 };

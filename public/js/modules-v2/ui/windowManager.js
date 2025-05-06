@@ -467,6 +467,14 @@ export function initializeDraggableWindows() {
     });
   }
   
+  // Help card (if it exists)
+  const helpCard = document.getElementById('help-card');
+  if (helpCard) {
+    makeDraggable('help-card', {
+      controls: [] // No custom controls needed, close button is already added
+    });
+  }
+  
   // Make context menu draggable but don't add header
   // Context menu needs special handling
   makeDraggable('context-menu', {

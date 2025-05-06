@@ -40,10 +40,29 @@ export function handleViewNodeDetails(node) {
     updateCombinedHighlights();
     updateHighlight();
     
-    // Hide info panel
+    // Depopulate info panel instead of hiding it
     const infoPanel = document.getElementById('info-panel');
     if (infoPanel) {
-      infoPanel.style.display = 'none';
+      // Clear the node ID
+      const nodeIdElement = document.getElementById('node-id');
+      if (nodeIdElement) {
+        nodeIdElement.textContent = 'No Node Selected';
+      }
+      
+      // Clear node content
+      const nodeContent = document.getElementById('node-content');
+      if (nodeContent) {
+        nodeContent.innerHTML = '';
+      }
+      
+      // Clear node tags
+      const nodeTags = document.getElementById('node-tags');
+      if (nodeTags) {
+        nodeTags.innerHTML = '';
+      }
+      
+      // Keep the panel visible if it was already visible
+      // We don't hide the panel here anymore
     }
     
     return;
@@ -129,10 +148,29 @@ export function handleViewNodeDetails(node) {
       graph.zoom(1.5, 1000);
     }
   } else {
-    // Hide info panel if no node is selected
+    // Depopulate info panel instead of hiding it
     const infoPanel = document.getElementById('info-panel');
     if (infoPanel) {
-      infoPanel.style.display = 'none';
+      // Clear the node ID
+      const nodeIdElement = document.getElementById('node-id');
+      if (nodeIdElement) {
+        nodeIdElement.textContent = 'No Node Selected';
+      }
+      
+      // Clear node content
+      const nodeContent = document.getElementById('node-content');
+      if (nodeContent) {
+        nodeContent.innerHTML = '';
+      }
+      
+      // Clear node tags
+      const nodeTags = document.getElementById('node-tags');
+      if (nodeTags) {
+        nodeTags.innerHTML = '';
+      }
+      
+      // Keep the panel visible if it was already visible
+      // We don't hide the panel here anymore
     }
   }
   
