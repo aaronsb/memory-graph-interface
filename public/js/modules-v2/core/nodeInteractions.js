@@ -1002,11 +1002,11 @@ export function applyDomainChangeToSelectedNodes(newDomain) {
         // Update state
         store.set('graphData', graphData);
         
-        // Update domain color legend if the domain is new
+        // Update memory domains panel if the domain is new
         const allDomains = store.get('allDomains') || [];
         if (!allDomains.includes(newDomain)) {
           domainModule.collectAllDomains();
-          domainModule.updateDomainColorLegend();
+          domainModule.updateMemoryDomainsPanel();
         }
         
         // Show result

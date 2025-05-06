@@ -106,14 +106,14 @@ export function getNodeColor(node) {
         try {
           // Import the domainManagement module dynamically to avoid circular references
           import('../core/domainManagement.js').then(domainManagement => {
-            if (typeof domainManagement.updateDomainColorLegend === 'function') {
-              domainManagement.updateDomainColorLegend();
+            if (typeof domainManagement.updateMemoryDomainsPanel === 'function') {
+              domainManagement.updateMemoryDomainsPanel();
             }
           }).catch(error => {
-            console.warn('Failed to update domain color legend:', error);
+            console.warn('Failed to update memory domains panel:', error);
           });
         } catch (error) {
-          console.warn('Failed to update domain color legend:', error);
+          console.warn('Failed to update memory domains panel:', error);
         }
       }, 0);
     }

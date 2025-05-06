@@ -89,7 +89,7 @@ export function handleChangeDomain(node, newDomain) {
         const allDomains = store.get('allDomains') || [];
         if (!allDomains.includes(newDomain)) {
           collectAllDomains();
-          updateDomainColorLegend();
+          updateMemoryDomainsPanel();
         }
       }
     } else {
@@ -251,8 +251,8 @@ export function handleCreateDomain() {
       store.set('allDomains', allDomains);
     }
     
-    // Update the legend
-    updateDomainColorLegend();
+    // Update the panel
+    updateMemoryDomainsPanel();
   });
 }
 
@@ -414,9 +414,9 @@ export function handleDeleteEmptyDomain(domain) {
 }
 
 /**
- * Update the domain color legend
+ * Update the memory domains panel
  */
-export function updateDomainColorLegend() {
+export function updateMemoryDomainsPanel() {
   // Get domains and ensure we have fresh data
   let allDomains = store.get('allDomains');
   if (!allDomains || allDomains.length === 0) {
@@ -509,7 +509,7 @@ export function updateDomainColorLegend() {
   header.style.alignItems = 'center';
   
   const titleSpan = document.createElement('span');
-  titleSpan.textContent = 'Domain Colors';
+  titleSpan.textContent = 'Memory Domains';
   titleSpan.className = 'window-title';
   header.appendChild(titleSpan);
   
@@ -639,7 +639,7 @@ export function updateDomainColorLegend() {
     name.style.fontSize = '14px';
     textContainer.appendChild(name);
     
-    // Node count
+    // Node count (clickable to select all nodes in this domain)
     const count = document.createElement('div');
     count.textContent = nodeCount;
     count.style.fontSize = '12px';
@@ -647,6 +647,23 @@ export function updateDomainColorLegend() {
     count.style.borderRadius = '12px';
     count.style.padding = '2px 8px';
     count.style.marginLeft = '10px';
+    count.style.cursor = 'pointer';
+    count.title = `Select all ${nodeCount} nodes in domain "${domain}"`;
+    
+    // Add hover effect for count
+    count.addEventListener('mouseenter', () => {
+      count.style.backgroundColor = 'rgba(100, 100, 255, 0.4)';
+    });
+    
+    count.addEventListener('mouseleave', () => {
+      count.style.backgroundColor = 'rgba(100, 100, 255, 0.2)';
+    });
+    
+    // Add click event to select all nodes in this domain
+    count.addEventListener('click', () => {
+      handleSelectAllNodesInDomain(domain);
+    });
+    
     textContainer.appendChild(count);
     
     item.appendChild(textContainer);
@@ -736,8 +753,8 @@ export function updateDomainColorLegend() {
     if (controlsContainer) {
       const toggleButton = document.createElement('button');
       toggleButton.id = 'toggle-domain-legend';
-      toggleButton.textContent = 'Toggle Domain Legend';
-      toggleButton.addEventListener('click', toggleDomainLegend);
+      toggleButton.textContent = 'Toggle Memory Domains';
+      toggleButton.addEventListener('click', toggleMemoryDomainsPanel);
       
       controlsContainer.appendChild(toggleButton);
     }
@@ -745,9 +762,9 @@ export function updateDomainColorLegend() {
 }
 
 /**
- * Toggle the visibility of the domain legend
+ * Toggle the visibility of the memory domains panel
  */
-export function toggleDomainLegend() {
+export function toggleMemoryDomainsPanel() {
   const legend = document.getElementById('domain-legend');
   
   if (legend) {
@@ -757,12 +774,12 @@ export function toggleDomainLegend() {
     // Update button text
     const toggleButton = document.getElementById('toggle-domain-legend');
     if (toggleButton) {
-      toggleButton.textContent = `Domain Legend: ${isVisible ? 'OFF' : 'ON'}`;
+      toggleButton.textContent = `Memory Domains: ${isVisible ? 'OFF' : 'ON'}`;
       toggleButton.style.backgroundColor = isVisible ? '#525252' : '#3388ff';
     }
   } else {
-    // Create the legend if it doesn't exist
-    updateDomainColorLegend();
+    // Create the panel if it doesn't exist
+    updateMemoryDomainsPanel();
   }
 }
 
@@ -823,12 +840,63 @@ export function getDomainPaginationInfo() {
   };
 }
 
+/**
+ * Select all nodes in a specific domain
+ * @param {string} domain - The domain to select all nodes from
+ */
+export function handleSelectAllNodesInDomain(domain) {
+  console.log(`Selecting all nodes in domain: ${domain}`);
+  
+  // Get the nodes in this domain
+  const { graphData } = store.getState();
+  const nodesInDomain = graphData.nodes.filter(node => node.domain === domain);
+  
+  if (nodesInDomain.length === 0) {
+    console.log(`No nodes found in domain ${domain}`);
+    return;
+  }
+  
+  // Import nodeInteractions to handle multi-select
+  import('../core/nodeInteractions.js').then(nodeInteractions => {
+    // Clear current selection first
+    const { multiSelectedNodes, multiSelectHighlightNodes } = store.getState();
+    multiSelectedNodes.length = 0;
+    multiSelectHighlightNodes.clear();
+    
+    // Add each node to the selection
+    nodesInDomain.forEach(node => {
+      multiSelectedNodes.push(node);
+      multiSelectHighlightNodes.add(node);
+    });
+    
+    // Update state
+    store.update({
+      multiSelectActive: multiSelectedNodes.length > 0,
+      multiSelectedNodes: [...multiSelectedNodes],
+      multiSelectHighlightNodes: new Set(multiSelectHighlightNodes)
+    });
+    
+    // Update visual highlighting
+    import('../utils/helpers.js').then(helpers => {
+      helpers.updateCombinedHighlights();
+      helpers.updateHighlight();
+    });
+    
+    // Show selection panel
+    nodeInteractions.showSelectionPanel();
+    nodeInteractions.updateSelectionPanel();
+    
+    // Show feedback to the user
+    alert(`Added ${nodesInDomain.length} nodes from domain "${domain}" to selection`);
+  });
+}
+
 // Export module
 export default {
   collectAllDomains,
   handleChangeDomain,
-  updateDomainColorLegend,
-  toggleDomainLegend,
+  updateMemoryDomainsPanel,
+  toggleMemoryDomainsPanel,
   getCurrentPageDomains,
   nextDomainPage,
   prevDomainPage,
@@ -836,5 +904,6 @@ export default {
   getDomainNodeCounts,
   handleCreateDomain,
   handleRenameDomain,
-  handleDeleteEmptyDomain
+  handleDeleteEmptyDomain,
+  handleSelectAllNodesInDomain
 };

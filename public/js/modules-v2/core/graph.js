@@ -9,7 +9,7 @@ import { getNodeLabel, getNodeColor, getLinkColor, updateHighlight, updateCombin
 import { showContextMenu, hideContextMenu } from '../ui/contextMenu.js';
 import { handleViewNodeDetails, handleMultiSelectNode, handleDeleteNode, showCustomConfirmDialog } from './nodeInteractions.js';
 import { toggleLinkCreationMode, handleCreateLink, handleDeleteLink } from './linkManagement.js';
-import { collectAllDomains, updateDomainColorLegend } from './domainManagement.js';
+import { collectAllDomains, updateMemoryDomainsPanel } from './domainManagement.js';
 import * as eventBus from '../utils/eventBus.js';
 
 /**
