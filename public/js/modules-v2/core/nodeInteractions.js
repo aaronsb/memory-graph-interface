@@ -557,14 +557,6 @@ export function hideSelectionPanel() {
  * Set up selection panel event listeners
  */
 export function setupSelectionPanelListeners() {
-  // Selection panel close button
-  const closeButton = document.getElementById('selection-close');
-  if (closeButton) {
-    closeButton.addEventListener('click', () => {
-      hideSelectionPanel();
-    });
-  }
-  
   // Clear selection button
   const clearButton = document.getElementById('clear-selection-btn');
   if (clearButton) {
@@ -599,23 +591,11 @@ export function setupSelectionPanelListeners() {
     });
   }
   
-  // Selection panel copy button
-  const copyButton = document.getElementById('selection-copy');
-  if (copyButton) {
-    copyButton.addEventListener('click', () => {
-      const { multiSelectedNodes } = store.getState();
-      
-      // Create text to copy
-      const text = multiSelectedNodes.map(node => node.id).join('\n');
-      
-      // Copy to clipboard
-      navigator.clipboard.writeText(text)
-        .then(() => {
-          console.log('Selection copied to clipboard');
-        })
-        .catch(err => {
-          console.error('Failed to copy selection:', err);
-        });
+  // Change domain button
+  const domainButton = document.getElementById('change-domain-btn');
+  if (domainButton) {
+    domainButton.addEventListener('click', () => {
+      handleChangeSelectedNodesDomain();
     });
   }
 }
@@ -689,6 +669,342 @@ export function handleLinkAllSelected() {
     });
 }
 
+/**
+ * Handle deleting multiple selected nodes
+ */
+export function handleDeleteSelectedNodes() {
+  const { multiSelectedNodes } = store.getState();
+  
+  if (!multiSelectedNodes || multiSelectedNodes.length === 0) {
+    console.log('No nodes selected for deletion');
+    return;
+  }
+  
+  // Show confirmation dialog
+  showCustomConfirmDialog(
+    `Are you sure you want to delete ${multiSelectedNodes.length} selected nodes?`,
+    () => {
+      // Create a copy of the array to avoid issues during deletion
+      const nodesToDelete = [...multiSelectedNodes];
+      let deletedCount = 0;
+      let errorCount = 0;
+      
+      // Sequential deletion with Promise.all and fetch
+      const deletePromises = nodesToDelete.map(node => {
+        return fetch(`/api/nodes/${node.id}`, {
+          method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(result => {
+          if (result.success) {
+            console.log(`Node ${node.id} deleted successfully`);
+            deletedCount++;
+            return { success: true, node };
+          } else {
+            console.error(`Failed to delete node ${node.id}:`, result.error);
+            errorCount++;
+            return { success: false, node, error: result.error };
+          }
+        })
+        .catch(error => {
+          console.error(`Error deleting node ${node.id}:`, error);
+          errorCount++;
+          return { success: false, node, error };
+        });
+      });
+      
+      // Process all deletions
+      Promise.all(deletePromises)
+        .then(results => {
+          console.log(`Deleted ${deletedCount}/${nodesToDelete.length} nodes, ${errorCount} errors`);
+          
+          // Remove deleted nodes from graph data
+          const { graphData } = store.getState();
+          
+          // Get successfully deleted node IDs
+          const deletedNodeIds = results
+            .filter(result => result.success)
+            .map(result => result.node.id);
+          
+          // Remove nodes
+          graphData.nodes = graphData.nodes.filter(node => !deletedNodeIds.includes(node.id));
+          
+          // Remove connected links
+          graphData.links = graphData.links.filter(link => {
+            const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+            const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+            
+            return !deletedNodeIds.includes(sourceId) && !deletedNodeIds.includes(targetId);
+          });
+          
+          // Update the graph
+          const { graph } = store.getState();
+          if (graph) {
+            graph.graphData(graphData);
+          }
+          
+          // Update state
+          store.set('graphData', graphData);
+          
+          // Clear selection
+          store.update({
+            multiSelectActive: false,
+            multiSelectedNodes: [],
+            multiSelectHighlightNodes: new Set()
+          });
+          
+          // Update visual highlighting
+          updateCombinedHighlights();
+          updateHighlight();
+          
+          // Hide selection panel
+          hideSelectionPanel();
+          
+          // Show result
+          alert(`Deleted ${deletedCount} nodes, ${errorCount} errors`);
+        });
+    }
+  );
+}
+
+/**
+ * Show domain selection dialog for selected nodes
+ */
+export function handleChangeSelectedNodesDomain() {
+  const { multiSelectedNodes } = store.getState();
+  
+  if (!multiSelectedNodes || multiSelectedNodes.length === 0) {
+    console.log('No nodes selected for domain change');
+    return;
+  }
+  
+  // Import domain management
+  import('./domainManagement.js').then(domainModule => {
+    // Get all domains
+    const allDomains = store.get('allDomains') || domainModule.collectAllDomains();
+    
+    // Create a simple modal for domain selection
+    const modal = document.createElement('div');
+    modal.style.position = 'fixed';
+    modal.style.top = '50%';
+    modal.style.left = '50%';
+    modal.style.transform = 'translate(-50%, -50%)';
+    modal.style.backgroundColor = 'rgba(30, 30, 40, 0.95)';
+    modal.style.padding = '20px';
+    modal.style.borderRadius = '8px';
+    modal.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.7)';
+    modal.style.zIndex = '1000';
+    modal.style.minWidth = '300px';
+    modal.style.maxWidth = '500px';
+    modal.style.maxHeight = '80vh';
+    modal.style.overflowY = 'auto';
+    modal.style.border = '1px solid rgba(100, 100, 255, 0.3)';
+    
+    // Add header
+    const header = document.createElement('h3');
+    header.textContent = `Change Domain for ${multiSelectedNodes.length} Nodes`;
+    header.style.marginTop = '0';
+    header.style.marginBottom = '15px';
+    header.style.color = '#aaccff';
+    header.style.borderBottom = '1px solid #5a5a8a';
+    header.style.paddingBottom = '10px';
+    modal.appendChild(header);
+    
+    // Add description
+    const description = document.createElement('p');
+    description.textContent = 'Select a domain to apply to all selected nodes:';
+    modal.appendChild(description);
+    
+    // Create domain container
+    const domainContainer = document.createElement('div');
+    domainContainer.style.display = 'flex';
+    domainContainer.style.flexDirection = 'column';
+    domainContainer.style.gap = '8px';
+    domainContainer.style.maxHeight = '300px';
+    domainContainer.style.overflowY = 'auto';
+    domainContainer.style.padding = '5px';
+    domainContainer.style.marginBottom = '15px';
+    
+    // Add domain options
+    allDomains.forEach(domain => {
+      const option = document.createElement('div');
+      option.className = 'domain-option';
+      option.style.display = 'flex';
+      option.style.alignItems = 'center';
+      option.style.padding = '8px 12px';
+      option.style.borderRadius = '4px';
+      option.style.cursor = 'pointer';
+      option.style.transition = 'background-color 0.2s';
+      
+      // Color indicator
+      const colorIndicator = document.createElement('div');
+      colorIndicator.style.width = '16px';
+      colorIndicator.style.height = '16px';
+      colorIndicator.style.backgroundColor = window.domainColors?.get(domain) || '#aaccff';
+      colorIndicator.style.marginRight = '10px';
+      colorIndicator.style.borderRadius = '3px';
+      option.appendChild(colorIndicator);
+      
+      // Domain name
+      const domainName = document.createElement('span');
+      domainName.textContent = domain;
+      option.appendChild(domainName);
+      
+      // Hover effect
+      option.addEventListener('mouseenter', () => {
+        option.style.backgroundColor = 'rgba(100, 100, 255, 0.2)';
+      });
+      
+      option.addEventListener('mouseleave', () => {
+        option.style.backgroundColor = 'transparent';
+      });
+      
+      // Click handler
+      option.addEventListener('click', () => {
+        // Apply domain change to all selected nodes
+        applyDomainChangeToSelectedNodes(domain);
+        // Remove modal
+        document.body.removeChild(modal);
+      });
+      
+      domainContainer.appendChild(option);
+    });
+    
+    modal.appendChild(domainContainer);
+    
+    // Add button container
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.display = 'flex';
+    buttonContainer.style.justifyContent = 'center';
+    buttonContainer.style.gap = '10px';
+    buttonContainer.style.marginTop = '15px';
+    
+    // Add cancel button
+    const cancelButton = document.createElement('button');
+    cancelButton.textContent = 'Cancel';
+    cancelButton.style.backgroundColor = '#525252';
+    cancelButton.style.color = 'white';
+    cancelButton.style.border = 'none';
+    cancelButton.style.padding = '8px 16px';
+    cancelButton.style.borderRadius = '4px';
+    cancelButton.style.cursor = 'pointer';
+    cancelButton.addEventListener('click', () => {
+      document.body.removeChild(modal);
+    });
+    buttonContainer.appendChild(cancelButton);
+    
+    modal.appendChild(buttonContainer);
+    
+    // Add to document
+    document.body.appendChild(modal);
+  });
+}
+
+/**
+ * Apply domain change to all selected nodes
+ * @param {string} newDomain - The new domain to apply
+ */
+export function applyDomainChangeToSelectedNodes(newDomain) {
+  const { multiSelectedNodes } = store.getState();
+  
+  if (!multiSelectedNodes || multiSelectedNodes.length === 0) {
+    console.log('No nodes selected for domain change');
+    return;
+  }
+  
+  console.log(`Changing domain of ${multiSelectedNodes.length} nodes to ${newDomain}`);
+  
+  // Import domain management
+  import('./domainManagement.js').then(domainModule => {
+    // Create a copy of the array to avoid issues during updates
+    const nodesToUpdate = [...multiSelectedNodes];
+    let updatedCount = 0;
+    let errorCount = 0;
+    
+    // Update each node
+    const updatePromises = nodesToUpdate.map(node => {
+      // Skip if domain is already set to the new value
+      if (node.domain === newDomain) {
+        console.log(`Node ${node.id} already has domain ${newDomain}`);
+        return Promise.resolve({ success: true, node, skipped: true });
+      }
+      
+      // Prepare update data
+      const updateData = {
+        node_id: node.id,
+        domain: newDomain
+      };
+      
+      // Update via API
+      return fetch('/api/nodes/update-domain', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updateData)
+      })
+      .then(response => response.json())
+      .then(result => {
+        if (result.success) {
+          console.log(`Domain of node ${node.id} updated successfully`);
+          updatedCount++;
+          return { success: true, node };
+        } else {
+          console.error(`Failed to update domain of node ${node.id}:`, result.error);
+          errorCount++;
+          return { success: false, node, error: result.error };
+        }
+      })
+      .catch(error => {
+        console.error(`Error updating domain of node ${node.id}:`, error);
+        errorCount++;
+        return { success: false, node, error };
+      });
+    });
+    
+    // Process all updates
+    Promise.all(updatePromises)
+      .then(results => {
+        console.log(`Updated domain of ${updatedCount}/${nodesToUpdate.length} nodes, ${errorCount} errors`);
+        
+        // Update nodes in the graph data
+        const { graphData } = store.getState();
+        
+        // Process each successful update
+        results
+          .filter(result => result.success && !result.skipped)
+          .forEach(result => {
+            const nodeIndex = graphData.nodes.findIndex(n => n.id === result.node.id);
+            
+            if (nodeIndex !== -1) {
+              // Update the node
+              graphData.nodes[nodeIndex].domain = newDomain;
+              graphData.nodes[nodeIndex].group = newDomain; // Update group for ForceGraph rendering
+            }
+          });
+        
+        // Update the graph
+        const { graph } = store.getState();
+        if (graph) {
+          graph.graphData(graphData);
+        }
+        
+        // Update state
+        store.set('graphData', graphData);
+        
+        // Update domain color legend if the domain is new
+        const allDomains = store.get('allDomains') || [];
+        if (!allDomains.includes(newDomain)) {
+          domainModule.collectAllDomains();
+          domainModule.updateDomainColorLegend();
+        }
+        
+        // Show result
+        alert(`Updated domain of ${updatedCount} nodes, ${errorCount} errors`);
+      });
+  });
+}
+
 // Setup event listeners for cross-module communication
 eventBus.on('node:editTags', () => {
   const selectedNode = store.get('selectedNode');
@@ -703,6 +1019,14 @@ eventBus.on('node:delete', (data) => {
   if (node) {
     handleDeleteNode(node);
   }
+});
+
+eventBus.on('nodes:deleteSelected', () => {
+  handleDeleteSelectedNodes();
+});
+
+eventBus.on('nodes:changeDomain', () => {
+  handleChangeSelectedNodesDomain();
 });
 
 eventBus.on('node:selectionCleared', () => {
@@ -726,6 +1050,9 @@ export default {
   handleShowTagInput,
   addTagToNode,
   handleDeleteNode,
+  handleDeleteSelectedNodes,
+  handleChangeSelectedNodesDomain,
+  applyDomainChangeToSelectedNodes,
   showCustomConfirmDialog,
   showSelectionPanel,
   updateSelectionPanelPosition,
