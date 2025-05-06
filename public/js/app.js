@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Create a controls container with vertical layout
   const controls = document.getElementById('controls');
   
-  // Create a flex container for the buttons
+  // Create a flex container for the buttons that will size to its content
   controls.style.display = 'flex';
   controls.style.flexDirection = 'column';
   controls.style.gap = '6px'; // Slightly reduced gap for tighter layout
@@ -90,6 +90,8 @@ document.addEventListener('DOMContentLoaded', () => {
   controls.style.padding = '10px';
   controls.style.backgroundColor = 'rgba(0,0,0,0.4)'; // Semi-transparent background
   controls.style.borderRadius = '6px';
+  controls.style.height = 'auto'; // Allow height to adjust to content
+  controls.style.maxHeight = '95vh'; // Prevent overflow on small screens
   
   // Unified button styling function
   const styleButton = (button, isOn) => {
@@ -163,8 +165,11 @@ document.addEventListener('DOMContentLoaded', () => {
   dbUpdateIndicator.style.padding = '8px 12px';
   dbUpdateIndicator.style.borderRadius = '4px';
   dbUpdateIndicator.style.marginTop = '12px';
+  dbUpdateIndicator.style.marginBottom = '4px'; // Add bottom margin
   dbUpdateIndicator.style.textAlign = 'center';
   dbUpdateIndicator.style.fontWeight = '500';
+  dbUpdateIndicator.style.width = '100%'; // Match width of buttons
+  dbUpdateIndicator.style.boxSizing = 'border-box'; // Include padding in width calculation
   dbUpdateIndicator.style.display = 'none'; // Hidden by default
   controls.appendChild(dbUpdateIndicator);
   
