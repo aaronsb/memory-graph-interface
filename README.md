@@ -180,17 +180,38 @@ For more details on contributing to this project, see [CONTRIBUTING.md](CONTRIBU
 - **Add Tags**: Select a node and use the tag input field to add new tags
 - **Refresh Data**: Click the "Refresh Data" button to manually update the visualization
 - **Toggle Effects**: Use the "Toggle Bloom" button to enable/disable the bloom visual effect
-- **Select Database**: In the File menu, select "Open Database" to choose a different database file
+- **Select Database**: In the File menu, select "Open Database" to choose a different database file using the file browser
 
 ## Multi-Agent Support
 
 The Memory Graph Interface can be used by multiple agents simultaneously, all accessing the same memory database. This allows for collaborative memory management and exploration across different AI systems.
+
+## Database Selection
+
+The application provides a file browser interface for selecting SQLite database files:
+
+1. Click **File** in the menu bar, then select **Open Database**
+2. You can either:
+   - Type a full path manually in the input field
+   - Use the **Browse** button to open the file browser
+   - Select from previously used database paths using the dropdown
+
+Using the file browser:
+- Navigate through directories by clicking on folder names
+- Filter files to only show `.db` SQLite database files
+- Click once on a file to select it
+- Double-click a file to select and confirm it immediately
+- Use the **Parent Directory** button to go up a level
+- Use the **Refresh** button to reload the current directory
+
+After selecting a database, click **Confirm** to load it into the application.
 
 ## Troubleshooting
 
 - **Database Errors**: If you see errors like "no such table: MEMORY_NODES", ensure your database has the correct schema. See [database-schema.md](docs/database-schema.md) for details.
 - **JavaScript Not Loading**: If the visualization doesn't appear, make sure you've built the JavaScript bundle with `npm run build:js`.
 - **Docker Issues**: If using Docker, ensure the volume path in `docker-compose.yml` points to a valid directory with your database file.
+- **File Browser Not Working**: If the file browser doesn't load directories correctly, check server permissions on the directories you're trying to access.
 
 ## Related Projects
 
