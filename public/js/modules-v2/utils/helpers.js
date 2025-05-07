@@ -241,55 +241,49 @@ export function updateHighlight() {
   // to avoid overriding the visualization style's settings
   const currentStyle = store.get('visualizationStyle');
   
-  // Only handle special link styling for temporary links to avoid overriding visualization settings
-  if (draggedNode && potentialLinkTarget) {
-    // For potential links, add styling just for those special links
-    graph.linkColor(link => {
-      if (link.type === 'potential_link') {
-        return '#00ffff'; // Cyan for potential links
-      }
-      // For other links, use the default styling from the current visualization style
-      return getLinkColor(link);
-    });
-    
-    // Enhance arrows for highlighted links
-    graph.linkDirectionalArrowLength(link => {
-      if (link.type === 'potential_link') {
-        return 8; // Larger arrow for potential links
-      } else if (highlightLinks.has(link)) {
-        return 7; // Larger arrow for highlighted links
-      }
-      // For non-highlighted links, maintain the current visualization style
-      return null; // null means "don't change from current setting"
-    });
-
-    // Make arrows brighter for highlighted links
-    graph.linkDirectionalArrowColor(link => {
-      if (link.type === 'potential_link') {
-        return '#00ffff'; // Cyan for potential links
-      } else if (highlightLinks.has(link)) {
-        return '#ffffff'; // White for highlighted links
-      }
-      // For non-highlighted links, maintain the current visualization style
-      return null;
-    });
-  } else if (highlightLinks.size > 0) {
-    // If we have highlighted links but no dragged node, enhance arrows for highlights
-    graph.linkDirectionalArrowLength(link => {
-      if (highlightLinks.has(link)) {
-        return 7; // Larger arrow for highlighted links
-      }
-      return null; // null means "don't change from current setting"
-    });
-    
-    // Make arrows brighter for highlighted links
-    graph.linkDirectionalArrowColor(link => {
-      if (highlightLinks.has(link)) {
-        return '#ffffff'; // White for highlighted links
-      }
-      return null;
-    });
-  }
+  // Always update link colors to ensure proper highlighting and un-highlighting
+  graph.linkColor(link => {
+    if (link.type === 'potential_link') {
+      return '#00ffff'; // Cyan for potential links
+    } else if (highlightLinks.has(link)) {
+      return '#ffffff'; // White for highlighted links
+    }
+    // For non-highlighted links, use the default styling from the visualization style
+    return getLinkColor(link);
+  });
+  
+  // Always update link width to ensure proper highlighting and un-highlighting
+  graph.linkWidth(link => {
+    if (link.type === 'potential_link') {
+      return 1.5; // Slightly thicker for potential links
+    } else if (highlightLinks.has(link)) {
+      return 1.5; // Slightly thicker for highlighted links
+    }
+    // For non-highlighted links, maintain the current visualization style width
+    return currentStyle?.linkWidth || 1.0;
+  });
+  
+  // Always update arrow properties to ensure proper highlighting and un-highlighting
+  graph.linkDirectionalArrowLength(link => {
+    if (link.type === 'potential_link') {
+      return 5; // Larger arrow for potential links
+    } else if (highlightLinks.has(link)) {
+      return 5; // Larger arrow for highlighted links
+    }
+    // For non-highlighted links, maintain the default arrow length from the style
+    return currentStyle?.linkDirectionalArrowLength || 3;
+  });
+  
+  // Always update arrow color to ensure proper highlighting and un-highlighting
+  graph.linkDirectionalArrowColor(link => {
+    if (link.type === 'potential_link') {
+      return '#00ffff'; // Cyan for potential links
+    } else if (highlightLinks.has(link)) {
+      return '#ffffff'; // White for highlighted links
+    }
+    // For non-highlighted links, use the link color
+    return getLinkColor(link);
+  });
     
   // Add or remove the virtual link
   const currentLinks = graph.graphData().links;

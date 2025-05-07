@@ -11,198 +11,58 @@ import * as eventBus from '../utils/eventBus.js';
 import { 
   applyVisualizationStyle, 
   getVisualizationStyles, 
-  getActiveVisualizationStyle,
-  toggleCustomLinkRenderer,
-  isUsingCustomLinkRenderer
+  getActiveVisualizationStyle
 } from '../core/visualizationManager.js';
 
 // Define control parameters for each visualization style
 const visualizationControls = {
-  // Simple style controls
-  simple: [
+  // Clean style controls (primary style)
+  clean: [
     {
       id: 'nodeRelSize',
       name: 'Node Size',
-      min: 4,
-      max: 20,
-      step: 0.5,
-      defaultValue: 12,
-      description: 'Size of nodes relative to their connections'
-    },
-    {
-      id: 'lineWidth',
-      name: 'Link Width',
-      min: 0.5,
-      max: 4,
-      step: 0.1,
-      defaultValue: 1.5,
-      description: 'Width of connection lines'
-    },
-    {
-      id: 'arrowLength',
-      name: 'Arrow Size',
       min: 2,
-      max: 15,
-      step: 0.5,
-      defaultValue: 7,
-      description: 'Size of directional arrows'
-    },
-    {
-      id: 'linkOpacity',
-      name: 'Link Opacity',
-      min: 0.1,
-      max: 1,
-      step: 0.05,
-      defaultValue: 0.8,
-      description: 'Transparency of links'
-    }
-  ],
-  
-  // Minimalist style controls
-  minimalist: [
-    {
-      id: 'nodeRelSize',
-      name: 'Node Size',
-      min: 4,
-      max: 15,
-      step: 0.5,
-      defaultValue: 8,
-      description: 'Size of nodes relative to their connections'
-    },
-    {
-      id: 'lineWidth',
-      name: 'Link Width',
-      min: 0.5,
-      max: 3,
-      step: 0.1,
-      defaultValue: 1,
-      description: 'Width of connection lines'
-    },
-    {
-      id: 'arrowLength',
-      name: 'Arrow Size',
-      min: 1,
-      max: 10,
+      max: 8,
       step: 0.5,
       defaultValue: 4,
-      description: 'Size of directional arrows'
+      description: 'Size of nodes'
     },
     {
-      id: 'linkOpacity',
-      name: 'Link Opacity',
-      min: 0.1,
-      max: 1,
-      step: 0.05,
-      defaultValue: 0.5,
-      description: 'Transparency of links'
-    }
-  ],
-  
-  // Network style controls
-  network: [
-    {
-      id: 'nodeRelSize',
-      name: 'Node Size',
-      min: 5,
-      max: 18,
-      step: 0.5,
-      defaultValue: 10,
-      description: 'Size of nodes relative to their connections'
-    },
-    {
-      id: 'lineWidth',
+      id: 'linkWidth',
       name: 'Link Width',
-      min: 1,
-      max: 5,
+      min: 0.2,
+      max: 2.5,
       step: 0.1,
-      defaultValue: 2,
+      defaultValue: 1.0,
       description: 'Width of connection lines'
     },
     {
-      id: 'arrowLength',
+      id: 'linkDirectionalArrowLength',
       name: 'Arrow Size',
-      min: 2,
-      max: 20,
-      step: 0.5,
-      defaultValue: 10,
-      description: 'Size of directional arrows'
-    },
-    {
-      id: 'linkCurvature',
-      name: 'Link Curvature',
       min: 0,
-      max: 0.5,
-      step: 0.01,
-      defaultValue: 0.1,
-      description: 'Curvature of connection lines'
+      max: 6,
+      step: 0.5,
+      defaultValue: 3,
+      description: 'Size of directional arrows'
     },
     {
       id: 'linkOpacity',
       name: 'Link Opacity',
       min: 0.1,
-      max: 1,
-      step: 0.05,
-      defaultValue: 0.85,
-      description: 'Transparency of links'
-    }
-  ],
-  
-  // Gradient connection count style controls
-  gradientConnectionCount: [
-    {
-      id: 'nodeRelSize',
-      name: 'Node Size',
-      min: 5,
-      max: 20,
-      step: 0.5,
-      defaultValue: 14,
-      description: 'Size of nodes relative to their connections'
-    },
-    {
-      id: 'lineWidth',
-      name: 'Link Width',
-      min: 0.5,
-      max: 4,
-      step: 0.1,
-      defaultValue: 1.8,
-      description: 'Width of connection lines'
-    },
-    {
-      id: 'arrowLength',
-      name: 'Arrow Size',
-      min: 2,
-      max: 15,
-      step: 0.5,
-      defaultValue: 9,
-      description: 'Size of directional arrows'
-    },
-    {
-      id: 'colorIntensity',
-      name: 'Gradient Intensity',
-      min: 0.3,
       max: 1,
       step: 0.05,
       defaultValue: 0.7,
-      description: 'Intensity of the complementary color gradient'
-    },
-    {
-      id: 'linkOpacity',
-      name: 'Link Opacity',
-      min: 0.1,
-      max: 1,
-      step: 0.05,
-      defaultValue: 0.8,
       description: 'Transparency of links'
     }
   ]
+  
+  // Additional styles can be added here in the future
 };
 
 // Store current parameter values - will be reset when switching styles
 let currentValues = {
-  simple: {},
-  minimalist: {},
-  network: {},
-  gradientConnectionCount: {}
+  clean: {}
+  // Additional styles can be added here in the future
 };
 
 // Function to reset current values for a style
@@ -324,146 +184,32 @@ function createVisualizationControlsPanelElement() {
   styleSelector.appendChild(styleSelect);
   controlsContainer.appendChild(styleSelector);
   
-  // Add renderer toggle
-  const rendererToggleWrapper = document.createElement('div');
-  rendererToggleWrapper.className = 'renderer-toggle-wrapper';
-  rendererToggleWrapper.style.marginBottom = '25px';
-  rendererToggleWrapper.style.backgroundColor = 'rgba(40, 40, 60, 0.8)';
-  rendererToggleWrapper.style.padding = '15px';
-  rendererToggleWrapper.style.borderRadius = '6px';
-  rendererToggleWrapper.style.border = '1px solid rgba(120, 100, 255, 0.3)';
+  // Add style information
+  const styleInfoWrapper = document.createElement('div');
+  styleInfoWrapper.className = 'style-info-wrapper';
+  styleInfoWrapper.style.marginBottom = '25px';
+  styleInfoWrapper.style.backgroundColor = 'rgba(40, 40, 60, 0.8)';
+  styleInfoWrapper.style.padding = '15px';
+  styleInfoWrapper.style.borderRadius = '6px';
+  styleInfoWrapper.style.border = '1px solid rgba(120, 100, 255, 0.3)';
   
-  const rendererTitle = document.createElement('h4');
-  rendererTitle.textContent = 'Link Renderer';
-  rendererTitle.style.margin = '0 0 12px 0';
-  rendererTitle.style.color = '#aaccff';
-  rendererTitle.style.fontSize = '16px';
-  rendererTitle.style.fontWeight = 'bold';
+  const styleInfoTitle = document.createElement('h4');
+  styleInfoTitle.textContent = 'Clean Style';
+  styleInfoTitle.style.margin = '0 0 12px 0';
+  styleInfoTitle.style.color = '#aaccff';
+  styleInfoTitle.style.fontSize = '16px';
+  styleInfoTitle.style.fontWeight = 'bold';
   
-  // Create toggle switch wrapper
-  const toggleContainer = document.createElement('div');
-  toggleContainer.style.display = 'flex';
-  toggleContainer.style.justifyContent = 'space-between';
-  toggleContainer.style.alignItems = 'center';
-  toggleContainer.style.marginTop = '10px';
+  const styleInfoText = document.createElement('div');
+  styleInfoText.textContent = 'This style uses simple lines with minimal styling for clean visuals, similar to the 3d-force-graph examples. It provides both better performance and a more elegant appearance.';
+  styleInfoText.style.fontSize = '13px';
+  styleInfoText.style.color = '#ccc';
+  styleInfoText.style.lineHeight = '1.5';
   
-  // Add labels for toggle
-  const defaultLabel = document.createElement('span');
-  defaultLabel.textContent = 'Default';
-  defaultLabel.style.color = isUsingCustomLinkRenderer() ? '#888' : '#fff';
-  defaultLabel.style.transition = 'color 0.3s';
+  styleInfoWrapper.appendChild(styleInfoTitle);
+  styleInfoWrapper.appendChild(styleInfoText);
   
-  const customLabel = document.createElement('span');
-  customLabel.textContent = 'Custom';
-  customLabel.style.color = isUsingCustomLinkRenderer() ? '#fff' : '#888';
-  customLabel.style.transition = 'color 0.3s';
-  
-  // Create toggle switch
-  const toggleSwitch = document.createElement('label');
-  toggleSwitch.className = 'toggle-switch';
-  toggleSwitch.style.position = 'relative';
-  toggleSwitch.style.display = 'inline-block';
-  toggleSwitch.style.width = '60px';
-  toggleSwitch.style.height = '28px';
-  toggleSwitch.style.marginLeft = '10px';
-  toggleSwitch.style.marginRight = '10px';
-  toggleSwitch.style.cursor = 'pointer';
-  
-  const toggleInput = document.createElement('input');
-  toggleInput.type = 'checkbox';
-  toggleInput.checked = isUsingCustomLinkRenderer();
-  toggleInput.style.opacity = '0';
-  toggleInput.style.width = '0';
-  toggleInput.style.height = '0';
-  toggleInput.style.position = 'absolute';
-  toggleInput.style.zIndex = '-1';
-  
-  const toggleSlider = document.createElement('div');
-  toggleSlider.className = 'toggle-slider';
-  toggleSlider.style.position = 'absolute';
-  toggleSlider.style.cursor = 'pointer';
-  toggleSlider.style.top = '0';
-  toggleSlider.style.left = '0';
-  toggleSlider.style.right = '0';
-  toggleSlider.style.bottom = '0';
-  toggleSlider.style.backgroundColor = isUsingCustomLinkRenderer() ? '#5a88ff' : '#666';
-  toggleSlider.style.transition = '.4s';
-  toggleSlider.style.borderRadius = '34px';
-  toggleSlider.style.boxShadow = 'inset 0 0 5px rgba(0, 0, 0, 0.2)';
-  
-  // Create toggle knob
-  const toggleKnob = document.createElement('div');
-  toggleKnob.style.position = 'absolute';
-  toggleKnob.style.height = '20px';
-  toggleKnob.style.width = '20px';
-  toggleKnob.style.left = isUsingCustomLinkRenderer() ? '36px' : '4px';
-  toggleKnob.style.bottom = '4px';
-  toggleKnob.style.backgroundColor = 'white';
-  toggleKnob.style.transition = '.4s';
-  toggleKnob.style.borderRadius = '50%';
-  toggleKnob.style.boxShadow = '0 0 3px rgba(0, 0, 0, 0.3)';
-  toggleSlider.appendChild(toggleKnob);
-  
-  // Add event listener to toggle
-  toggleInput.addEventListener('change', () => {
-    const isCustom = toggleCustomLinkRenderer();
-    
-    // Update UI to reflect new state
-    toggleSlider.style.backgroundColor = isCustom ? '#5a88ff' : '#666';
-    toggleKnob.style.left = isCustom ? '36px' : '4px';
-    
-    // Update labels
-    defaultLabel.style.color = isCustom ? '#888' : '#fff';
-    customLabel.style.color = isCustom ? '#fff' : '#888';
-  });
-  
-  // Make the entire slider and labels clickable
-  toggleSlider.addEventListener('click', () => {
-    toggleInput.checked = !toggleInput.checked;
-    // Trigger the change event manually
-    toggleInput.dispatchEvent(new Event('change'));
-  });
-  
-  defaultLabel.addEventListener('click', () => {
-    if (isUsingCustomLinkRenderer()) {
-      toggleInput.checked = false;
-      toggleInput.dispatchEvent(new Event('change'));
-    }
-  });
-  
-  customLabel.addEventListener('click', () => {
-    if (!isUsingCustomLinkRenderer()) {
-      toggleInput.checked = true;
-      toggleInput.dispatchEvent(new Event('change'));
-    }
-  });
-  
-  // Assemble toggle
-  toggleSwitch.appendChild(toggleInput);
-  toggleSwitch.appendChild(toggleSlider);
-  
-  // Assemble toggle container
-  toggleContainer.appendChild(defaultLabel);
-  toggleContainer.appendChild(toggleSwitch);
-  toggleContainer.appendChild(customLabel);
-  
-  // Add description
-  const rendererDescription = document.createElement('div');
-  rendererDescription.textContent = 'Toggle between default Force3D renderer and our custom link renderer';
-  rendererDescription.style.fontSize = '12px';
-  rendererDescription.style.color = '#999';
-  rendererDescription.style.marginTop = '12px';
-  rendererDescription.style.fontStyle = 'italic';
-  rendererDescription.style.borderTop = '1px solid rgba(100, 100, 255, 0.1)';
-  rendererDescription.style.paddingTop = '8px';
-  
-  // Assemble renderer toggle section
-  rendererToggleWrapper.appendChild(rendererTitle);
-  rendererToggleWrapper.appendChild(toggleContainer);
-  rendererToggleWrapper.appendChild(rendererDescription);
-  
-  // Add to controls container before the style-specific controls
-  controlsContainer.appendChild(rendererToggleWrapper);
+  controlsContainer.appendChild(styleInfoWrapper);
   
   // Initialize with the current active style
   loadControlValues(getActiveVisualizationStyle());
@@ -631,31 +377,18 @@ function applyControlChange(styleId, controlId, value) {
       graph.nodeRelSize(value);
       break;
       
-    case 'lineWidth':
-      // Update line width in custom links
-      // This requires re-applying the visualization style with the updated parameter
-      style.customLinkWidth = value;
-      applyVisualizationStyle(styleId);
+    case 'linkWidth':
+      // Set constant link width for clean style
+      graph.linkWidth(value);
       break;
       
-    case 'arrowLength':
-      // Update arrow length in custom links
-      style.customArrowLength = value;
-      applyVisualizationStyle(styleId);
+    case 'linkDirectionalArrowLength':
+      // Update arrow length
+      graph.linkDirectionalArrowLength(value);
       break;
       
     case 'linkOpacity':
       graph.linkOpacity(value);
-      break;
-      
-    case 'linkCurvature':
-      graph.linkCurvature(value);
-      break;
-      
-    case 'colorIntensity':
-      // Update gradient blend intensity for the gradient connection count style
-      style.colorIntensity = value;
-      applyVisualizationStyle(styleId);
       break;
   }
 }
