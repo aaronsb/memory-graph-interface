@@ -18,6 +18,9 @@ import {
   helpers 
 } from './modules-v2/index.js';
 
+// Import WebSocket service
+import webSocketService from './modules-v2/utils/webSocketService.js';
+
 // Initialize the application when the DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Memory Graph Visualizer - Initializing modular version');
@@ -103,6 +106,41 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fetch link types
   linkManagement.fetchLinkTypes();
   
+  // Initialize WebSocket connection
+  webSocketService.initWebSocket();
+  
+  // Set up reconnect event handler
+  webSocketService.on('reconnect', (data) => {
+    console.log(`WebSocket reconnecting... Attempt ${data.attempt}/${data.maxAttempts}`);
+  });
+  
+  // Set up error event handler
+  webSocketService.on('error', (data) => {
+    console.error('WebSocket error:', data.message);
+    
+    // Show error notification for final errors only
+    if (data.isFinal) {
+      const notification = document.createElement('div');
+      notification.innerHTML = `<strong>Connection Error</strong><br>${data.message}`;
+      notification.style.position = 'fixed';
+      notification.style.top = '50px';
+      notification.style.right = '10px';
+      notification.style.backgroundColor = 'rgba(255, 0, 0, 0.8)';
+      notification.style.color = 'white';
+      notification.style.padding = '10px';
+      notification.style.borderRadius = '5px';
+      notification.style.zIndex = 2000;
+      document.body.appendChild(notification);
+      
+      // Remove error notification after 8 seconds
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification);
+        }
+      }, 8000);
+    }
+  });
+  
   // Log initialization complete
   console.log('Memory Graph Visualizer - Initialization complete');
   
@@ -119,6 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
       windowManager,
       menuBar,
       helpers,
+      webSocketService,
       getState: () => store.getState()
     };
     

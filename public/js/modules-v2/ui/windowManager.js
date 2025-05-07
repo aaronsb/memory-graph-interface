@@ -21,12 +21,41 @@ const EVENTS = {
 
 // Register event handlers
 function setupEventListeners() {
-  // Listen for domain legend creation events
-  eventBus.on('domainLegend:created', (legendId) => {
-    if (document.getElementById(legendId)) {
-      makeDraggable(legendId, { controls: [] });
+  // Helper function to handle both creation and updates
+  const makeLegendDraggable = (legendId) => {
+    console.log(`Domain legend event received for: ${legendId}`);
+    const element = document.getElementById(legendId);
+    
+    if (element) {
+      // Always reinitialize as draggable
+      console.log(`Making ${legendId} draggable or refreshing drag handlers`);
+      
+      // If it was already draggable, we need to reinitialize it
+      // because the content has been replaced (including the drag handle)
+      makeDraggable(legendId, { 
+        controls: [],
+        addHeader: false, // The legend already has a header with drag-handle class
+        forceReInit: true // Force reinitialization
+      });
+      
+      element.draggableInitialized = true;
+      
+      // Directly attach a mousedown handler to the header
+      const header = element.querySelector('h3.window-header');
+      if (header) {
+        console.log('Found domain legend header, attaching direct mousedown handler');
+        header.style.cursor = 'move';
+      }
+    } else {
+      console.error(`Element with ID ${legendId} not found`);
     }
-  });
+  };
+
+  // Listen for domain legend creation events
+  eventBus.on('domainLegend:created', makeLegendDraggable);
+  
+  // Also listen for domain legend updates (same handling)
+  eventBus.on('domainLegend:updated', makeLegendDraggable);
 }
 
 // Call setup when module is loaded
@@ -53,11 +82,24 @@ export function makeDraggable(windowId, options = {}) {
     addHeader: true,
     controls: [],
     defaultPosition: null,
-    onMove: null
+    onMove: null,
+    forceReInit: false  // Add option to force reinitialization
   };
   
   // Merge options with defaults
   const settings = { ...defaults, ...options };
+  
+  // If the element is already draggable and we're not forcing reinitialization, just return it
+  if (windowElement.draggableInitialized && !settings.forceReInit) {
+    console.log(`Element ${windowId} is already draggable, skipping initialization`);
+    return windowElement;
+  }
+  
+  // If we're reinitializing, clean up old event listeners
+  if (windowElement._cleanupDraggable && typeof windowElement._cleanupDraggable === 'function') {
+    windowElement._cleanupDraggable();
+    windowElement._cleanupDraggable = null;
+  }
   
   // Store original styles
   const originalStyles = {
@@ -86,6 +128,22 @@ export function makeDraggable(windowId, options = {}) {
   
   // If element has a header already, use it for dragging
   let headerElement = windowElement.querySelector('h1, h2, h3, h4, h5, h6, .window-header, .drag-handle');
+  
+  if (windowId === 'domain-legend') {
+    // For debugging
+    console.log('Domain legend detected, searching for header...');
+    
+    // Look for all possible header elements in the domain legend
+    const possibleHeaders = windowElement.querySelectorAll('h3, .window-header, .drag-handle');
+    console.log('Possible headers found:', possibleHeaders.length);
+    
+    if (possibleHeaders.length > 0) {
+      headerElement = possibleHeaders[0];
+      console.log('Using first found header:', headerElement.tagName);
+    } else {
+      console.warn('No suitable header found for domain-legend');
+    }
+  }
   
   // If no header and addHeader option is true, create a header
   if (!headerElement && settings.addHeader) {
@@ -257,6 +315,11 @@ export function makeDraggable(windowId, options = {}) {
   // Attach the mousedown event to the header for dragging
   if (headerElement) {
     headerElement.addEventListener('mousedown', handleMouseDown);
+    
+    // For the domain legend, also make sure it visually indicates draggability
+    if (windowId === 'domain-legend') {
+      headerElement.style.cursor = 'move';
+    }
   }
   
   // Add reset method to window element
@@ -268,6 +331,16 @@ export function makeDraggable(windowId, options = {}) {
       windowElement.style.left = originalStyles.left;
       windowElement.style.top = originalStyles.top;
     }
+  };
+  
+  // Store cleanup function to remove event listeners when reinitializing
+  windowElement._cleanupDraggable = () => {
+    console.log(`Cleaning up draggable for ${windowId}`);
+    if (headerElement) {
+      headerElement.removeEventListener('mousedown', handleMouseDown);
+    }
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
   };
   
   // Make window element contain metadata

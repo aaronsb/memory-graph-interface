@@ -142,6 +142,7 @@ export function updateMemoryDomainsPanel() {
         // Create the legend element if it doesn't exist
         legend = document.createElement('div');
         legend.id = 'domain-legend';
+        legend.className = 'draggable-window';
         legend.style.position = 'absolute';
         legend.style.bottom = '10px';
         legend.style.right = '10px';
@@ -151,8 +152,7 @@ export function updateMemoryDomainsPanel() {
         legend.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.7)';
         legend.style.zIndex = '100';
         legend.style.width = '350px';
-        legend.style.maxHeight = '80vh';
-        legend.style.overflowY = 'auto';
+        legend.style.height = 'fit-content'; /* Make height fit exactly to content */
         legend.style.border = '1px solid rgba(100, 100, 255, 0.3)';
         
         // Add to the document
@@ -169,18 +169,71 @@ export function updateMemoryDomainsPanel() {
         }
       }
       
+      // Store original draggableInitialized state
+      const wasDraggable = legend.draggableInitialized === true;
+      
       // Clear existing legend items
       legend.innerHTML = '';
       
-      // Add title and controls
+      // Preserve draggable property
+      if (wasDraggable) {
+        legend.draggableInitialized = true;
+      }
+      
+      // Add title and controls - make it draggable
       const header = document.createElement('h3');
       header.className = 'window-header drag-handle';
       header.style.margin = '0 0 15px 0';
-      header.style.padding = '0 0 10px 0';
+      header.style.padding = '5px 0 10px 0';
       header.style.borderBottom = '1px solid rgba(100, 100, 255, 0.3)';
       header.style.display = 'flex';
       header.style.justifyContent = 'space-between';
       header.style.alignItems = 'center';
+      header.style.cursor = 'move'; // Indicate it's draggable
+      
+      // Add a direct mousedown handler to enable dragging
+      header.addEventListener('mousedown', (e) => {
+        // Only process left mouse button
+        if (e.button !== 0) return;
+        
+        // Ignore if clicking on a control
+        if (e.target.closest('.window-control')) return;
+        
+        e.preventDefault();
+        
+        // Track dragging
+        const isDragging = true;
+        const startX = e.clientX;
+        const startY = e.clientY;
+        
+        // Get the current position
+        const rect = legend.getBoundingClientRect();
+        const initialLeft = rect.left;
+        const initialTop = rect.top;
+        
+        // Function to handle mouse movement
+        const handleMouseMove = (moveEvent) => {
+          moveEvent.preventDefault();
+          
+          // Calculate new position
+          const dx = moveEvent.clientX - startX;
+          const dy = moveEvent.clientY - startY;
+          
+          // Update position
+          legend.style.left = `${initialLeft + dx}px`;
+          legend.style.top = `${initialTop + dy}px`;
+        };
+        
+        // Function to handle mouse up
+        const handleMouseUp = (upEvent) => {
+          document.removeEventListener('mousemove', handleMouseMove);
+          document.removeEventListener('mouseup', handleMouseUp);
+        };
+        
+        // Add listeners
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+      });
       
       const titleSpan = document.createElement('span');
       titleSpan.textContent = 'Memory Domains';
@@ -419,6 +472,18 @@ export function updateMemoryDomainsPanel() {
       
       createButtonContainer.appendChild(createButton);
       legend.appendChild(createButtonContainer);
+        
+        // Re-emit event to ensure draggability even after content update
+        try {
+          import('../../utils/eventBus.js').then(eventBus => {
+            // Emit event with a small delay to ensure DOM is updated
+            setTimeout(() => {
+              eventBus.emit('domainLegend:updated', 'domain-legend');
+            }, 100);
+          });
+        } catch (error) {
+          console.warn('Failed to notify about domain legend update:', error);
+        }
         }); // Close the colors.then
       }); // Close the collectAllDomains.then
     }); // Close the collection.then

@@ -22,6 +22,12 @@ let currentDbPath = config.dbPath;
 // Track the last modification time of the database file
 let lastDatabaseModTime = null;
 
+// File watcher instance
+let fileWatcher = null;
+
+// Change event listeners
+const changeListeners = [];
+
 /**
  * Connect to the database with exponential backoff retry logic
  * @param {boolean} isReconnect - Whether this is a reconnection attempt
@@ -162,6 +168,147 @@ function initLastModTime() {
     } else {
       lastDatabaseModTime = stats.mtime.getTime();
       console.log('Initial database modification time:', new Date(lastDatabaseModTime).toISOString());
+    }
+  });
+}
+
+/**
+ * Start watching the database file for changes
+ */
+function startFileWatcher() {
+  // Stop existing watcher if any
+  stopFileWatcher();
+  
+  try {
+    console.log(`Starting file watcher for database: ${currentDbPath}`);
+    
+    // Set up file watcher
+    const watchDir = path.dirname(currentDbPath);
+    const filename = path.basename(currentDbPath);
+    
+    fileWatcher = fs.watch(watchDir, (eventType, changedFile) => {
+      // Check if the event affects our database file
+      if (changedFile === filename) {
+        console.log(`Database file change detected (${eventType}): ${currentDbPath}`);
+        
+        // Check modification time to filter duplicate events
+        checkDatabaseModified((err, result) => {
+          if (err) {
+            console.error('Error checking database modification:', err.message);
+            return;
+          }
+          
+          if (result.changed) {
+            // Notify all registered listeners
+            notifyChangeListeners();
+          }
+        });
+      }
+    });
+    
+    // Handle watcher errors
+    fileWatcher.on('error', (error) => {
+      console.error('Database file watcher error:', error);
+      // Attempt to restart watcher after a delay
+      setTimeout(() => {
+        if (fileWatcher === null) {
+          startFileWatcher();
+        }
+      }, 5000);
+    });
+    
+    console.log('File watcher started successfully');
+    return true;
+  } catch (error) {
+    console.error('Failed to start database file watcher:', error);
+    return false;
+  }
+}
+
+/**
+ * Stop the database file watcher
+ */
+function stopFileWatcher() {
+  if (fileWatcher) {
+    console.log('Stopping database file watcher');
+    fileWatcher.close();
+    fileWatcher = null;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Register a listener to be notified of database changes
+ * @param {Function} listener - Callback function to be called when database changes
+ * @returns {Function} - Function to remove the listener
+ */
+function addChangeListener(listener) {
+  if (typeof listener !== 'function') {
+    throw new Error('Listener must be a function');
+  }
+  
+  // Add listener if not already registered
+  if (!changeListeners.includes(listener)) {
+    changeListeners.push(listener);
+    console.log(`Database change listener added (${changeListeners.length} total)`);
+  }
+  
+  // Start watcher if this is the first listener
+  if (changeListeners.length === 1) {
+    startFileWatcher();
+  }
+  
+  // Return function to remove this listener
+  return () => {
+    removeChangeListener(listener);
+  };
+}
+
+/**
+ * Remove a previously registered change listener
+ * @param {Function} listener - The listener to remove
+ * @returns {boolean} - Whether the listener was found and removed
+ */
+function removeChangeListener(listener) {
+  const index = changeListeners.indexOf(listener);
+  
+  if (index !== -1) {
+    changeListeners.splice(index, 1);
+    console.log(`Database change listener removed (${changeListeners.length} remaining)`);
+    
+    // Stop watcher if no listeners remain
+    if (changeListeners.length === 0) {
+      stopFileWatcher();
+    }
+    
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Notify all registered listeners about database changes
+ */
+function notifyChangeListeners() {
+  if (changeListeners.length === 0) {
+    return;
+  }
+  
+  const changeInfo = {
+    timestamp: Date.now(),
+    path: currentDbPath
+  };
+  
+  console.log(`Notifying ${changeListeners.length} listeners of database change`);
+  
+  // Call each listener with change information
+  changeListeners.forEach(listener => {
+    try {
+      listener(changeInfo);
+    } catch (error) {
+      console.error('Error in database change listener:', error);
     }
   });
 }
@@ -319,6 +466,9 @@ function validateDatabasePath(dbPath) {
 function updateDatabasePath(newPath, callback) {
   const oldPath = currentDbPath;
   
+  // Stop watching the current database
+  stopFileWatcher();
+  
   // Update the global DB_PATH
   currentDbPath = newPath;
   
@@ -330,6 +480,11 @@ function updateDatabasePath(newPath, callback) {
       // Revert to old path if connection fails
       currentDbPath = oldPath;
       connectToDatabase(true);
+      
+      // Restart watcher for the old path if there are listeners
+      if (changeListeners.length > 0) {
+        startFileWatcher();
+      }
       
       return callback(err);
     }
@@ -344,6 +499,14 @@ function updateDatabasePath(newPath, callback) {
           new Date(lastDatabaseModTime).toISOString());
       }
     });
+    
+    // Restart the file watcher for the new path if there are listeners
+    if (changeListeners.length > 0) {
+      startFileWatcher();
+    }
+    
+    // Notify listeners about the path change
+    notifyChangeListeners();
     
     callback(null, { 
       success: true, 
@@ -396,5 +559,9 @@ module.exports = {
   validateDatabasePath,
   updateDatabasePath,
   getDatabasePath,
-  getDatabase
+  getDatabase,
+  startFileWatcher,
+  stopFileWatcher,
+  addChangeListener,
+  removeChangeListener
 };

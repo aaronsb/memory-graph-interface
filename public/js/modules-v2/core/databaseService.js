@@ -122,10 +122,17 @@ export function updateDatabaseAndReload(path) {
         return import('./graph.js').then(graph => {
           return graph.loadData(false).then(() => {
             console.log('Data reloaded successfully');
-            return {
-              success: true,
-              message: 'Database updated and data reloaded successfully'
-            };
+            
+            // Update memory domains panel
+            return import('./domainManagement.js').then(domainManagement => {
+              domainManagement.updateMemoryDomainsPanel();
+              console.log('Memory domains panel updated');
+              
+              return {
+                success: true,
+                message: 'Database updated and data reloaded successfully'
+              };
+            });
           });
         });
       } else {

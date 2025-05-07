@@ -7,6 +7,7 @@
 import store from '../../state/store.js';
 import { disableForcesDuringDrag, restoreForces } from './forceManagement.js';
 import { updateHighlight } from '../../utils/helpers.js';
+import * as eventBus from '../../utils/eventBus.js';
 
 /**
  * Set up drag handling for the graph
@@ -43,6 +44,9 @@ export function setupDragHandling(graph) {
     // Clear potential link target
     store.set('potentialLinkTarget', null);
     updateHighlight();
+    
+    // Emit event for node movement to update reference plane
+    eventBus.emit('graph:nodesMoved');
   });
 }
 

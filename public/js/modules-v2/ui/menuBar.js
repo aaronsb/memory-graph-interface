@@ -5,10 +5,13 @@
 import store from '../state/store.js';
 import { toggleBloomEffect, toggleSummariesOnNodes, toggleEdgeLabels, toggleZoomOnSelect, toggleHelpCard } from './controls.js';
 import { toggleMemoryDomainsPanel } from '../core/domainManagement/ui.js';
+import { toggleReferencePlane } from '../core/graph/referencePlane.js';
+import { refreshDataFromDatabaseChange } from '../utils/webSocketService.js';
 
 // Cache DOM elements
 let menuBarElement = null;
 let activeDropdown = null;
+let databaseChangeBadge = null;
 
 /**
  * Updates a menu item's checked state
@@ -151,6 +154,85 @@ function addSeparator(dropdown) {
 }
 
 /**
+ * Create database change indicator badge
+ */
+function createDatabaseChangeBadge() {
+  // Create badge element if it doesn't exist
+  if (!databaseChangeBadge) {
+    databaseChangeBadge = document.createElement('div');
+    databaseChangeBadge.id = 'database-change-badge';
+    databaseChangeBadge.className = 'database-change-badge';
+    databaseChangeBadge.innerHTML = '!';
+    
+    // Add tooltip text
+    databaseChangeBadge.setAttribute('title', 'Database changed externally. Click to refresh data.');
+    
+    // Add the CSS for the badge
+    const style = document.createElement('style');
+    style.textContent = `
+      .database-change-badge {
+        position: absolute;
+        top: 0;
+        right: 0;
+        background-color: #ff4444;
+        color: white;
+        font-weight: bold;
+        font-size: 10px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 1000;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        animation: pulse-animation 1.5s infinite;
+        display: none;
+      }
+      
+      @keyframes pulse-animation {
+        0% {
+          box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.7);
+        }
+        70% {
+          box-shadow: 0 0 0 6px rgba(255, 68, 68, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(255, 68, 68, 0);
+        }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    // Add click handler to refresh data
+    databaseChangeBadge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      refreshDataFromDatabaseChange(true);
+      updateDatabaseChangeBadge(false);
+    });
+  }
+  
+  return databaseChangeBadge;
+}
+
+/**
+ * Update database change indicator visibility
+ * @param {boolean} isVisible - Whether the indicator should be visible
+ */
+export function updateDatabaseChangeBadge(isVisible) {
+  // Create badge if it doesn't exist
+  if (!databaseChangeBadge) {
+    createDatabaseChangeBadge();
+  }
+  
+  // Update visibility
+  if (databaseChangeBadge) {
+    databaseChangeBadge.style.display = isVisible ? 'flex' : 'none';
+  }
+}
+
+/**
  * Initialize the menu bar
  */
 export function initMenuBar() {
@@ -161,6 +243,15 @@ export function initMenuBar() {
     menuBarElement = document.createElement('div');
     menuBarElement.id = 'menu-bar';
     menuBarElement.className = 'menu-bar';
+    
+    // Create and add database change badge
+    const badge = createDatabaseChangeBadge();
+    menuBarElement.appendChild(badge);
+    
+    // Listen for database changes
+    store.subscribeToKey('databaseChanged', (newValue) => {
+      updateDatabaseChangeBadge(newValue === true);
+    });
     
     // Close any open dropdowns when clicking elsewhere
     document.addEventListener('click', () => {
@@ -176,8 +267,21 @@ export function initMenuBar() {
     // Add items to File dropdown
     fileDropdown.appendChild(
       createDropdownItem('Refresh Data', () => {
-        const loadData = require('../core/graph').loadData;
-        loadData(true); // preserve positions
+        Promise.all([
+          import('../core/graph.js'),
+          import('../core/domainManagement.js')
+        ]).then(([graph, domainManagement]) => {
+          // Load graph data with preserved positions
+          graph.loadData(true).then(() => {
+            // Update domains panel (handle both export styles)
+            if (typeof domainManagement.updateMemoryDomainsPanel === 'function') {
+              domainManagement.updateMemoryDomainsPanel();
+            } else if (typeof domainManagement.default?.updateMemoryDomainsPanel === 'function') {
+              domainManagement.default.updateMemoryDomainsPanel();
+            }
+            console.log('Data and domains refreshed');
+          });
+        });
       })
     );
     
@@ -392,6 +496,29 @@ export function initMenuBar() {
       })
     );
     
+    // Modify toggleAutoRefresh to update menu item state
+    const toggleAutoRefresh = () => {
+      // Toggle auto refresh setting
+      const currentValue = store.get('autoRefreshOnDatabaseChange') !== false;
+      const newValue = !currentValue;
+      
+      // Update store
+      store.set('autoRefreshOnDatabaseChange', newValue);
+      
+      // Update menu item
+      setTimeout(() => {
+        updateMenuItemState('toggle-auto-refresh', newValue);
+      }, 0);
+      
+      return newValue;
+    };
+    
+    // Auto Database Refresh option
+    const autoRefreshEnabled = store.get('autoRefreshOnDatabaseChange') !== false;
+    const autoRefreshItem = createDropdownItem('Auto-Refresh on Database Change', toggleAutoRefresh, false, true, autoRefreshEnabled);
+    autoRefreshItem.id = 'toggle-auto-refresh';
+    fileDropdown.appendChild(autoRefreshItem);
+    
     addSeparator(fileDropdown);
     
     fileDropdown.appendChild(
@@ -459,6 +586,20 @@ export function initMenuBar() {
     const zoomOnSelectItem = createDropdownItem('Auto-Zoom on Selection', wrappedToggleZoomOnSelect, false, true, store.get('zoomOnSelect'));
     zoomOnSelectItem.id = 'toggle-zoom-on-select';
     viewDropdown.appendChild(zoomOnSelectItem);
+    
+    // Create wrapped toggle function for reference plane
+    const wrappedToggleReferencePlane = () => {
+      const isVisible = toggleReferencePlane(); // This returns the new visibility state
+      setTimeout(() => {
+        updateMenuItemState('toggle-reference-plane', isVisible);
+      }, 0);
+    };
+    
+    // Reference Plane - get initial state from store if available
+    const referencePlaneVisible = store.get('referencePlane')?.visible || false;
+    const referencePlaneItem = createDropdownItem('Reference Plane', wrappedToggleReferencePlane, false, true, referencePlaneVisible);
+    referencePlaneItem.id = 'toggle-reference-plane';
+    viewDropdown.appendChild(referencePlaneItem);
     
     // 3. Panels Menu
     const { category: panelsCategory, dropdown: panelsDropdown } = createMenuCategory('Panels');
@@ -607,11 +748,15 @@ export function setupMenuStateListeners() {
   // When this function is called, the menu items have already been created
   // We just need to sync with current application state
   
+  // File Menu States
+  updateMenuItemState('toggle-auto-refresh', store.get('autoRefreshOnDatabaseChange') !== false);
+  
   // View Menu States
   updateMenuItemState('toggle-bloom-effect', store.get('bloomEnabled'));
   updateMenuItemState('toggle-summaries', store.get('showSummariesOnNodes'));
   updateMenuItemState('toggle-edge-labels', store.get('showEdgeLabels'));
   updateMenuItemState('toggle-zoom-on-select', store.get('zoomOnSelect'));
+  updateMenuItemState('toggle-reference-plane', store.get('referencePlane')?.visible || false);
   
   // Panels Menu States  
   
@@ -643,5 +788,6 @@ export function setupMenuStateListeners() {
 
 export default {
   initMenuBar,
-  setupMenuStateListeners
+  setupMenuStateListeners,
+  updateDatabaseChangeBadge
 };
