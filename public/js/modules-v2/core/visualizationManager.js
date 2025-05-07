@@ -220,7 +220,6 @@ const visualizationStyles = {
       // Domain-based coloring with connection count gradient
       if (node.group && window.domainColors?.has(node.group)) {
         const baseColor = window.domainColors.get(node.group);
-        const complementaryColor = getComplementaryColor(baseColor);
         
         // Get normalized connection factor (0-1)
         const factor = getNormalizedConnectionFactor(
@@ -229,8 +228,24 @@ const visualizationStyles = {
           window._connectionData.normalizationFactors
         );
         
-        // Blend base color with complementary color based on connection factor
-        return blendColors(baseColor, complementaryColor, factor);
+        // Enhanced: Cache complementary colors by domain
+        if (!window._domainComplementaryColors) {
+          window._domainComplementaryColors = new Map();
+        }
+        
+        // Get or calculate complementary color
+        let complementaryColor;
+        if (window._domainComplementaryColors.has(node.group)) {
+          complementaryColor = window._domainComplementaryColors.get(node.group);
+        } else {
+          // Calculate visually distinctive complementary color
+          complementaryColor = getComplementaryColor(baseColor);
+          window._domainComplementaryColors.set(node.group, complementaryColor);
+        }
+        
+        // Use a more dramatic blend for higher contrast
+        const enhancedFactor = Math.pow(factor, 0.7); // Apply power curve to emphasize differences
+        return blendColors(baseColor, complementaryColor, enhancedFactor, 0.9); // Higher alpha for stronger colors
       }
       
       // Default color if no domain
