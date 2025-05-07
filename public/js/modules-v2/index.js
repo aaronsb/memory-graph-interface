@@ -20,6 +20,8 @@ import * as eventBus from './utils/eventBus.js';
 import * as settingsManager from './utils/settingsManager.js';
 import * as webSocketService from './utils/webSocketService.js';
 import * as visualizationManager from './core/visualizationManager.js';
+import * as colorUtils from './utils/colorUtils.js';
+import * as connectionAnalysis from './core/graph/connectionAnalysis.js';
 
 // Export for direct importing
 export {
@@ -38,7 +40,9 @@ export {
   eventBus,
   settingsManager,
   webSocketService,
-  visualizationManager
+  visualizationManager,
+  colorUtils,
+  connectionAnalysis
 };
 
 // Default export for importing everything at once
@@ -58,5 +62,7 @@ export default {
   eventBus,
   settingsManager,
   webSocketService,
-  visualizationManager
+  visualizationManager,
+  colorUtils,
+  connectionAnalysis
 };

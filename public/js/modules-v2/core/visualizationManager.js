@@ -8,6 +8,12 @@
 import store from '../state/store.js';
 import { getNodeColor, getLinkColor } from '../utils/helpers.js';
 import { initializeDomainColors } from './domainManagement/colorManagement.js';
+import { getComplementaryColor, blendColors } from '../utils/colorUtils.js';
+import { 
+  calculateNodeConnectionCounts, 
+  calculateDomainNormalizationFactors, 
+  getNormalizedConnectionFactor 
+} from './graph/connectionAnalysis.js';
 
 // Available visualization styles
 const visualizationStyles = {
@@ -121,6 +127,131 @@ const visualizationStyles = {
     
     // Background
     backgroundColor: '#000033'
+  },
+  
+  // Gradient connection count style
+  gradientConnectionCount: {
+    id: 'gradientConnectionCount',
+    name: 'Gradient Connection Count',
+    description: 'Nodes colored by domain with gradient to complementary color based on connection count',
+    
+    // Node styling
+    nodeRelSize: 14,
+    nodeFill: (node) => {
+      const { graph } = store.getState();
+      
+      // Special conditions (same as simple style)
+      const { 
+        highlightNodes, 
+        potentialLinkTarget,
+        draggedNode,
+        selectedNodes,
+        hoverNode,
+        selectedNode
+      } = store.getState();
+      
+      // Handle special node states
+      if (potentialLinkTarget && node.id === potentialLinkTarget.id) {
+        return '#00ffff'; // Cyan for potential link target
+      }
+      
+      if (draggedNode && node.id === draggedNode.id) {
+        return '#ffff00'; // Yellow for dragged node
+      }
+      
+      // Check if node is in selected nodes array
+      if (selectedNodes.some(n => n.id === node.id)) {
+        return '#00ff00'; // Green for selected nodes
+      }
+      
+      // Support for link selection highlighting
+      if (window._linkSelection && window._linkSelection.includes(node)) {
+        return '#00ff00'; // Green for link-selected nodes
+      }
+      
+      // Highlight system
+      if (highlightNodes.has(node)) {
+        // Brighten the highlight color if this is the selected or hovered node
+        if ((selectedNode && node.id === selectedNode.id) || node === hoverNode) {
+          return '#ff5500'; // Brighter orange for selected/hovered node
+        }
+        return '#ff8800'; // Orange for highlighted nodes
+      }
+      
+      // If we can't access the graph data, use the default domain color
+      if (!graph) {
+        // Domain-based coloring (fallback)
+        if (node.group && window.domainColors?.has(node.group)) {
+          return window.domainColors.get(node.group);
+        }
+        return '#cccccc';
+      }
+      
+      // Get graph data for connection analysis
+      const graphData = graph.graphData();
+      
+      // Use cached connection data if available
+      if (!window._connectionData || window._connectionDataTimestamp !== graphData.timestamp) {
+        // Calculate connection data for all nodes
+        const connectionCounts = calculateNodeConnectionCounts(graphData.nodes, graphData.links);
+        
+        // Cache calculated data
+        window._connectionData = {
+          connectionCounts,
+          normalizationFactors: calculateDomainNormalizationFactors({
+            // Create a simple domain groups object on the fly
+            ...[...new Set(graphData.nodes.map(n => n.group || 'default'))].reduce((acc, domain) => {
+              acc[domain] = graphData.nodes
+                .filter(n => (n.group || 'default') === domain)
+                .map(n => ({ 
+                  node: n, 
+                  connectionCount: connectionCounts.get(n.id) || 0 
+                }))
+                .sort((a, b) => b.connectionCount - a.connectionCount);
+              return acc;
+            }, {})
+          })
+        };
+        
+        // Add timestamp to avoid recalculating on every frame
+        window._connectionDataTimestamp = graphData.timestamp || Date.now();
+      }
+      
+      // Domain-based coloring with connection count gradient
+      if (node.group && window.domainColors?.has(node.group)) {
+        const baseColor = window.domainColors.get(node.group);
+        const complementaryColor = getComplementaryColor(baseColor);
+        
+        // Get normalized connection factor (0-1)
+        const factor = getNormalizedConnectionFactor(
+          node, 
+          window._connectionData.connectionCounts,
+          window._connectionData.normalizationFactors
+        );
+        
+        // Blend base color with complementary color based on connection factor
+        return blendColors(baseColor, complementaryColor, factor);
+      }
+      
+      // Default color if no domain
+      return '#cccccc';
+    },
+    nodeThreeObject: null,
+    
+    // Link styling
+    linkWidth: (link) => {
+      const { highlightLinks } = store.getState();
+      return highlightLinks.has(link) ? 5 : Math.max(1, 3 * (link.strength || 0.5));
+    },
+    linkColor: (link) => getLinkColor(link),
+    linkCurvature: 0.1,
+    linkDirectionalParticles: (link) => Math.round(10 * (link.strength || 0.5)),
+    linkDirectionalParticleWidth: 4,
+    linkDirectionalParticleSpeed: (link) => 0.002 * link.strength,
+    linkOpacity: 0.8,
+    
+    // Background
+    backgroundColor: '#000022'
   }
 };
 
@@ -196,11 +327,12 @@ export function applyVisualizationStyle(styleId) {
     visualizationStyle: style
   });
   
-  // Trigger a re-render
+  // Trigger a re-render, preserving the timestamp for connection analysis
   const graphData = graph.graphData();
   graph.graphData({
     nodes: [...graphData.nodes],
-    links: [...graphData.links]
+    links: [...graphData.links],
+    timestamp: graphData.timestamp || Date.now()
   });
 }
 

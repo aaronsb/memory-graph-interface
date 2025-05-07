@@ -190,8 +190,12 @@ export function processGraphData(data, currentPositions = {}, preservePositions 
   // Process links
   const links = data.links;
   
-  // Update graph data
-  const newGraphData = { nodes, links };
+  // Update graph data with timestamp for connection analysis caching
+  const newGraphData = { 
+    nodes, 
+    links,
+    timestamp: Date.now()
+  };
   
   // Log info
   console.log('Processed memory-centric graph data:', newGraphData);
@@ -292,8 +296,9 @@ export function reloadSpecificData(nodeIds = [], linkIds = []) {
           graphData.links.push(...data.links);
         }
         
-        // Update the graph
+        // Update the graph with a new timestamp
         if (graph) {
+          graphData.timestamp = Date.now();
           graph.graphData(graphData);
         }
         
