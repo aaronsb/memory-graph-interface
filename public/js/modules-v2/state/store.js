@@ -23,6 +23,10 @@ const initialState = {
   databasePath: '/default/database/path',
   customDatabasePath: null,
   databasePathHistory: [],
+  databaseChanged: false,
+  autoRefreshOnDatabaseChange: true,
+  lastDatabaseChangeTimestamp: null,
+  websocketConnected: false,
   
   // Highlighting
   highlightNodes: new Set(),
@@ -77,6 +81,7 @@ class Store {
   constructor() {
     this.state = { ...initialState };
     this.listeners = new Set();
+    this.keyListeners = new Map(); // Map of key -> Set of listeners
   }
 
   // Get the entire state object
@@ -92,28 +97,105 @@ class Store {
   // Update a specific state value
   set(key, value) {
     const oldState = { ...this.state };
+    const oldValue = this.state[key];
     this.state[key] = value;
+    
+    // Notify general listeners
     this.notifyListeners(oldState);
+    
+    // Notify key-specific listeners if the value changed
+    if (oldValue !== value) {
+      this.notifyKeyListeners(key, value, oldValue);
+    }
+    
     return this.state[key];
   }
 
   // Update multiple state values at once
   update(updates) {
     const oldState = { ...this.state };
-    this.state = { ...this.state, ...updates };
+    
+    // Track keys that changed for key-specific listeners
+    const changedKeys = [];
+    
+    // Apply each update and track changed keys
+    Object.entries(updates).forEach(([key, value]) => {
+      if (this.state[key] !== value) {
+        changedKeys.push([key, value, this.state[key]]);
+      }
+      this.state[key] = value;
+    });
+    
+    // Notify general listeners
     this.notifyListeners(oldState);
+    
+    // Notify key-specific listeners
+    changedKeys.forEach(([key, newValue, oldValue]) => {
+      this.notifyKeyListeners(key, newValue, oldValue);
+    });
+    
     return this.state;
   }
 
-  // Subscribe to state changes
+  // Subscribe to all state changes
   subscribe(listener) {
+    if (typeof listener !== 'function') {
+      console.error('Store.subscribe: listener must be a function');
+      return () => {};
+    }
+    
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
+  
+  // Subscribe to changes of a specific key
+  subscribeToKey(key, listener) {
+    if (typeof listener !== 'function') {
+      console.error('Store.subscribeToKey: listener must be a function');
+      return () => {};
+    }
+    
+    if (!this.keyListeners.has(key)) {
+      this.keyListeners.set(key, new Set());
+    }
+    
+    this.keyListeners.get(key).add(listener);
+    
+    // Return unsubscribe function
+    return () => {
+      const keySet = this.keyListeners.get(key);
+      if (keySet) {
+        keySet.delete(listener);
+        if (keySet.size === 0) {
+          this.keyListeners.delete(key);
+        }
+      }
+    };
+  }
 
-  // Notify all listeners of state changes
+  // Notify all general listeners of state changes
   notifyListeners(oldState) {
-    this.listeners.forEach(listener => listener(this.state, oldState));
+    this.listeners.forEach(listener => {
+      try {
+        listener(this.state, oldState);
+      } catch (error) {
+        console.error('Error in store listener:', error);
+      }
+    });
+  }
+  
+  // Notify key-specific listeners of changes
+  notifyKeyListeners(key, newValue, oldValue) {
+    const keyListeners = this.keyListeners.get(key);
+    if (keyListeners) {
+      keyListeners.forEach(listener => {
+        try {
+          listener(newValue, oldValue);
+        } catch (error) {
+          console.error(`Error in key listener for "${key}":`, error);
+        }
+      });
+    }
   }
 }
 

@@ -6,6 +6,7 @@
 
 import store from '../../state/store.js';
 import { temporarilyReduceForces } from './forceManagement.js';
+import { positionPlaneBelowNodes } from './referencePlane.js';
 
 /**
  * Load graph data from the API
@@ -199,6 +200,11 @@ export function processGraphData(data, currentPositions = {}, preservePositions 
   // Update store
   store.set('graphData', newGraphData);
   
+  // Position the reference plane below the lowest node, with offset
+  if (nodes.length > 0 && store.get('referencePlane')?.visible) {
+    positionPlaneBelowNodes(newGraphData, 100);
+  }
+  
   // Update graph visualization
   if (preservePositions) {
     // Use reduced charge strength initially to prevent explosive expansion
@@ -293,6 +299,11 @@ export function reloadSpecificData(nodeIds = [], linkIds = []) {
         
         // Update state
         store.set('graphData', graphData);
+        
+        // Reposition reference plane if visible
+        if (store.get('referencePlane')?.visible) {
+          positionPlaneBelowNodes(graphData, 100);
+        }
         
         resolve(data);
       })

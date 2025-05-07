@@ -18,6 +18,7 @@ import * as fileDialog from './ui/fileDialog.js';
 import * as helpers from './utils/helpers.js';
 import * as eventBus from './utils/eventBus.js';
 import * as settingsManager from './utils/settingsManager.js';
+import * as webSocketService from './utils/webSocketService.js';
 
 // Export for direct importing
 export {
@@ -34,7 +35,8 @@ export {
   fileDialog,
   helpers,
   eventBus,
-  settingsManager
+  settingsManager,
+  webSocketService
 };
 
 // Default export for importing everything at once
@@ -52,5 +54,6 @@ export default {
   fileDialog,
   helpers,
   eventBus,
-  settingsManager
+  settingsManager,
+  webSocketService
 };

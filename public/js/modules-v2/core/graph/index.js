@@ -12,6 +12,7 @@ import * as dataLoading from './dataLoading.js';
 import * as interactions from './interactions.js';
 import * as dragHandling from './dragHandling.js';
 import * as events from './events.js';
+import * as referencePlane from './referencePlane.js';
 
 // Initialize event listeners
 events.setupEventListeners();
@@ -44,6 +45,14 @@ export const {
   setupDragHandling
 } = dragHandling;
 
+export const {
+  addReferencePlane,
+  toggleReferencePlane,
+  updateReferencePlane,
+  positionPlaneBelowNodes,
+  cleanupReferencePlane
+} = referencePlane;
+
 // Export default object with all functions
 export default {
   // Initialization
@@ -66,5 +75,12 @@ export default {
   setupInteractionModes,
   
   // Drag Handling
-  setupDragHandling
+  setupDragHandling,
+  
+  // Reference Plane
+  addReferencePlane,
+  toggleReferencePlane,
+  updateReferencePlane,
+  positionPlaneBelowNodes,
+  cleanupReferencePlane
 };

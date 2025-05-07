@@ -9,6 +9,7 @@ import { getNodeLabel, getNodeColor, getLinkColor } from '../../utils/helpers.js
 import { setupNodeInteractions } from './interactions.js';
 import { setupLinkInteractions } from './interactions.js';
 import { setupDragHandling } from './dragHandling.js';
+import { addReferencePlane } from './referencePlane.js';
 
 /**
  * Initialize the 3D force graph
@@ -86,6 +87,19 @@ export function initGraph() {
   
   // Set up bloom effect if available
   setupBloomEffect(graph);
+  
+  // Add reference plane for orientation
+  addReferencePlane(graph, {
+    position: { x: 0, y: -200, z: 0 }, // Initial position, will be adjusted after data loads
+    size: 2000,
+    divisions: 50,
+    color1: 0x444466,
+    color2: 0x222244,
+    planeColor: 0x080820,
+    planeOpacity: 0.1,
+    visible: true,
+    autoAdjust: true // Enable automatic adjustment
+  });
   
   // Store the graph in the global state
   store.update({
