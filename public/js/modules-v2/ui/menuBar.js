@@ -3,7 +3,7 @@
  */
 
 import store from '../state/store.js';
-import { toggleBloomEffect, toggleSummariesOnNodes, toggleEdgeLabels, toggleZoomOnSelect, toggleHelpCard } from './controls.js';
+import { toggleBloomEffect, toggleSummariesOnNodes, toggleEdgeLabels, toggleZoomOnSelect, toggleHelpCard, toggleVisualizationControlsPanel } from './controls.js';
 import { toggleMemoryDomainsPanel } from '../core/domainManagement/ui.js';
 import { toggleReferencePlane } from '../core/graph/referencePlane.js';
 import { refreshDataFromDatabaseChange } from '../utils/webSocketService.js';
@@ -712,6 +712,24 @@ export function initMenuBar() {
     domainsItem.id = 'toggle-memory-domains';
     panelsDropdown.appendChild(domainsItem);
     
+    // Create function to toggle visualization controls panel
+    const wrappedToggleVizControls = () => {
+      // This now returns a boolean indicating the new state
+      const isVisible = toggleVisualizationControlsPanel();
+      
+      // Update menu item state
+      setTimeout(() => {
+        updateMenuItemState('toggle-viz-controls', isVisible);
+      }, 0);
+    };
+    
+    // Visualization Controls Panel
+    const vizControlsPanel = document.getElementById('visualization-controls-panel');
+    const vizControlsVisible = vizControlsPanel ? vizControlsPanel.style.display === 'block' : false;
+    const vizControlsItem = createDropdownItem('Visualization Controls', wrappedToggleVizControls, false, true, vizControlsVisible);
+    vizControlsItem.id = 'toggle-viz-controls';
+    panelsDropdown.appendChild(vizControlsItem);
+    
     // Help Card - gets initial state
     const helpCardVisible = store.get('showHelpCard') || false;
     const helpCardItem = createDropdownItem('Help Card', wrappedToggleHelpCard, false, true, helpCardVisible);
@@ -824,6 +842,13 @@ export function setupMenuStateListeners() {
   if (domainLegend) {
     const isDomainLegendVisible = domainLegend.style.display === 'block';
     updateMenuItemState('toggle-memory-domains', isDomainLegendVisible);
+  }
+  
+  // Visualization controls panel visibility
+  const vizControlsPanel = document.getElementById('visualization-controls-panel');
+  if (vizControlsPanel) {
+    const isVizControlsPanelVisible = vizControlsPanel.style.display === 'block';
+    updateMenuItemState('toggle-viz-controls', isVizControlsPanelVisible);
   }
   
   // Help card visibility

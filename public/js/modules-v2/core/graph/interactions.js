@@ -26,7 +26,8 @@ export function setupNodeInteractions(graph) {
       hoverHighlightNodes,
       hoverHighlightLinks,
       graphData,
-      hoverNode
+      hoverNode,
+      selectedNode
     } = store.getState();
     
     // If control key is pressed, we're in a special selection mode
@@ -66,6 +67,10 @@ export function setupNodeInteractions(graph) {
           }
         }
       });
+    } else {
+      // When mouse leaves a node (node is null), clear all hover highlights
+      // Only keep selected node highlights if a node is selected
+      console.log('Mouse left node, clearing hover highlights');
     }
     
     // Update state with new hover highlights

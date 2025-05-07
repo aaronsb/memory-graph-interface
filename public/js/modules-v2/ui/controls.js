@@ -7,6 +7,7 @@
 import store from '../state/store.js';
 import { updateHighlight } from '../utils/helpers.js';
 import { applyVisualizationStyle } from '../core/visualizationManager.js';
+import * as visualizationControlsPanel from './visualizationControlsPanel.js';
 
 /**
  * Toggle bloom effect on/off
@@ -171,6 +172,25 @@ export function toggleMemoryDomainsPanel() {
 }
 
 /**
+ * Toggle visualization controls panel visibility
+ */
+export function toggleVisualizationControlsPanel() {
+  const isVisible = visualizationControlsPanel.toggleVisualizationControlsPanel();
+  
+  // Update the button appearance if it exists
+  const toggleButton = document.getElementById('toggle-viz-controls');
+  if (toggleButton) {
+    // Find the label span inside the menu item
+    const label = toggleButton.querySelector('.menu-item-label');
+    if (label) {
+      label.textContent = 'Visualization Controls';
+    }
+  }
+  
+  return isVisible;
+}
+
+/**
  * Apply UI state from settings
  * @param {Object} uiState - The UI state object to apply
  */
@@ -238,6 +258,14 @@ export function applyUIState(uiState) {
     }
   }
   
+  if (uiState.visualizationControlsPanelVisible !== undefined) {
+    if (uiState.visualizationControlsPanelVisible) {
+      visualizationControlsPanel.showVisualizationControlsPanel();
+    } else {
+      visualizationControlsPanel.hideVisualizationControlsPanel();
+    }
+  }
+  
   // Apply visualization style if specified
   if (uiState.visualizationStyle) {
     // Import and apply style once graph is available
@@ -301,6 +329,7 @@ export default {
   toggleZoomOnSelect,
   toggleHelpCard,
   toggleMemoryDomainsPanel,
+  toggleVisualizationControlsPanel,
   setupUIEventListeners,
   applyUIState
 };

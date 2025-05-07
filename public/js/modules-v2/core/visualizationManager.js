@@ -15,10 +15,17 @@ import {
   calculateArrowPosition 
 } from '../utils/linkUtils.js';
 import { 
+  createGridStyleLink, 
+  updateGridStyleLink 
+} from './graph/customLinks.js';
+import { 
   calculateNodeConnectionCounts, 
   calculateDomainNormalizationFactors, 
   getNormalizedConnectionFactor 
 } from './graph/connectionAnalysis.js';
+
+// Flag to toggle between custom and default link renderers
+let useCustomLinkRenderer = true;
 
 // Available visualization styles
 const visualizationStyles = {
@@ -33,22 +40,54 @@ const visualizationStyles = {
     nodeFill: (node) => getNodeColor(node),
     nodeThreeObject: null, // Use default THREE.Mesh sphere
     
-    // Link styling
-    linkWidth: (link) => {
+    // Use custom links for all connections
+    linkThreeObject: (link) => {
       const { highlightLinks } = store.getState();
-      return calculateLinkWidth(link, highlightLinks.has(link));
+      const isHighlighted = highlightLinks.has(link);
+      
+      // Get link color for arrow color
+      const linkColor = getLinkColor(link);
+      
+      // Parse color to RGB
+      let arrowColor = 0x8888ff; // Default
+      if (linkColor.startsWith('rgba(')) {
+        const components = linkColor.replace('rgba(', '').replace(')', '').split(',');
+        const r = parseInt(components[0].trim());
+        const g = parseInt(components[1].trim());
+        const b = parseInt(components[2].trim());
+        arrowColor = (r << 16) | (g << 8) | b;
+      }
+      
+      // Calculate arrow length based on link strength
+      const arrowLength = calculateArrowLength(link, isHighlighted);
+      const arrowPosition = calculateArrowPosition(link);
+      
+      // Create a custom link with reference plane colors
+      return createGridStyleLink(link, {x:0,y:0,z:0}, {x:0,y:0,z:0}, {
+        mainColor: 0x444466, // Main grid color
+        lineWidth: isHighlighted ? 2.5 : 1.5,
+        showArrow: true,
+        arrowLength: arrowLength,
+        arrowPosition: arrowPosition,
+        arrowColor: arrowColor,
+        curved: false
+      });
     },
-    linkColor: (link) => getLinkColor(link),
+    linkPositionUpdate: (obj, { start, end }) => {
+      // Update position of the custom link object
+      if (obj) {
+        updateGridStyleLink(obj, start, end);
+        return true; // Indicate we've handled positioning
+      }
+      return false;
+    },
+    linkColor: (link) => getLinkColor(link), // Just for highlighting logic
     linkCurvature: 0,
     linkOpacity: 0.8,
     
-    // Use arrow heads for link direction
-    linkDirectionalArrowLength: (link) => {
-      const { highlightLinks } = store.getState();
-      return calculateArrowLength(link, highlightLinks.has(link));
-    },
-    linkDirectionalArrowRelPos: (link) => calculateArrowPosition(link),
-    linkDirectionalArrowColor: (link) => getLinkColor(link),
+    // Disable default arrows since we have custom ones
+    linkDirectionalArrowLength: 0,
+    linkDirectionalArrowRelPos: 1,
     
     // Background
     backgroundColor: '#000020'
@@ -71,20 +110,41 @@ const visualizationStyles = {
     },
     nodeThreeObject: null,
     
-    // Link styling
-    linkWidth: (link) => calculateLinkWidth(link, false) * 0.7, // Slightly thinner for minimalist style
-    linkColor: () => 'rgba(200, 200, 200, 0.4)', // All links same color
+    // Use custom links for minimalist style
+    linkThreeObject: (link) => {
+      // Simple, consistent color for minimalist style
+      const arrowColor = 0xcccccc; // Light gray
+      
+      // Minimal arrow length for stronger links
+      const strength = typeof link.strength === 'number' ? link.strength : 0.5;
+      const showArrow = strength > 0.3; // Only show arrows for medium-strong links
+      const arrowLength = strength > 0.5 ? 4 : 2; // Minimal arrows
+      
+      // Create a simple link with minimal style
+      return createGridStyleLink(link, {x:0,y:0,z:0}, {x:0,y:0,z:0}, {
+        mainColor: 0x333344, // More subtle color
+        lineWidth: 1,
+        showArrow: showArrow,
+        arrowLength: arrowLength,
+        arrowPosition: 0.92, // Closer to end
+        arrowColor: arrowColor,
+        curved: false
+      });
+    },
+    linkPositionUpdate: (obj, { start, end }) => {
+      // Update position of the custom link object
+      if (obj) {
+        updateGridStyleLink(obj, start, end);
+        return true; // Indicate we've handled positioning
+      }
+      return false;
+    },
+    linkColor: () => 'rgba(200, 200, 200, 0.4)', // For selection logic
     linkCurvature: 0,
     linkOpacity: 0.5,
     
-    // Subtle arrow heads for direction
-    linkDirectionalArrowLength: (link) => {
-      // Minimal arrows for minimalist style
-      const strength = typeof link.strength === 'number' ? link.strength : 0.5;
-      return strength > 0.5 ? 4 : (strength > 0.2 ? 2 : 0);
-    },
-    linkDirectionalArrowRelPos: 0.92, // Position close to the end
-    linkDirectionalArrowColor: () => 'rgba(200, 200, 200, 0.6)', // Slightly brighter than links
+    // Disable default arrows
+    linkDirectionalArrowLength: 0,
     linkOpacity: 0.4,
     
     // Background
@@ -117,41 +177,75 @@ const visualizationStyles = {
     },
     nodeThreeObject: null,
     
-    // Link styling
-    linkWidth: (link) => {
+    // Use custom curved links with vibrant network colors
+    linkThreeObject: (link) => {
       const { highlightLinks } = store.getState();
-      return calculateLinkWidth(link, highlightLinks.has(link)) * 1.2; // Slightly thicker for network style
-    },
-    linkColor: (link) => {
-      // More vibrant link colors
+      const isHighlighted = highlightLinks.has(link);
+      
+      // Get vibrant colors based on link type
+      let linkColor;
+      let mainColor;
+      
       switch(link.type) {
         case 'relates_to':
-          return 'rgba(120, 200, 255, 0.8)'; // Brighter blue
+          linkColor = 'rgba(120, 200, 255, 0.8)'; // Brighter blue
+          mainColor = 0x78c8ff;
+          break;
         case 'synthesizes':
-          return 'rgba(255, 200, 120, 0.8)'; // Brighter orange
+          linkColor = 'rgba(255, 200, 120, 0.8)'; // Brighter orange
+          mainColor = 0xffc878;
+          break;
         case 'supports':
-          return 'rgba(120, 255, 200, 0.8)'; // Brighter green
+          linkColor = 'rgba(120, 255, 200, 0.8)'; // Brighter green
+          mainColor = 0x78ffc8;
+          break;
         case 'refines':
-          return 'rgba(255, 120, 255, 0.8)'; // Brighter purple
+          linkColor = 'rgba(255, 120, 255, 0.8)'; // Brighter purple
+          mainColor = 0xff78ff;
+          break;
         default:
-          return 'rgba(220, 220, 220, 0.6)'; // Brighter gray
+          linkColor = 'rgba(220, 220, 220, 0.6)'; // Brighter gray
+          mainColor = 0xdddddd;
+      }
+      
+      // Calculate arrow length based on link strength
+      const arrowLength = calculateArrowLength(link, isHighlighted) * 1.5; // Larger for network style
+      const arrowPosition = calculateArrowPosition(link);
+      
+      // Create a vibrant, colorful curved link
+      return createGridStyleLink(link, {x:0,y:0,z:0}, {x:0,y:0,z:0}, {
+        mainColor: mainColor,
+        lineWidth: isHighlighted ? 3 : 2, // Thicker for network style
+        showArrow: true,
+        arrowLength: arrowLength,
+        arrowPosition: arrowPosition,
+        arrowColor: mainColor,
+        curved: true // Use curved lines for network style
+      });
+    },
+    linkPositionUpdate: (obj, { start, end }) => {
+      // Update position of the custom link object
+      if (obj) {
+        updateGridStyleLink(obj, start, end);
+        return true; // Indicate we've handled positioning
+      }
+      return false;
+    },
+    linkColor: (link) => {
+      // Keep this for selection logic - same vibrant colors
+      switch(link.type) {
+        case 'relates_to': return 'rgba(120, 200, 255, 0.8)'; // Brighter blue
+        case 'synthesizes': return 'rgba(255, 200, 120, 0.8)'; // Brighter orange
+        case 'supports': return 'rgba(120, 255, 200, 0.8)'; // Brighter green
+        case 'refines': return 'rgba(255, 120, 255, 0.8)'; // Brighter purple
+        default: return 'rgba(220, 220, 220, 0.6)'; // Brighter gray
       }
     },
     linkCurvature: 0.1, // Slight curvature
     linkOpacity: 0.85,
     
-    // Use bold, colorful arrows for the network style
-    linkDirectionalArrowLength: (link) => {
-      const { highlightLinks } = store.getState();
-      const baseLength = calculateArrowLength(link, highlightLinks.has(link));
-      return baseLength * 1.5; // Larger arrows for network style
-    },
-    linkDirectionalArrowRelPos: (link) => calculateArrowPosition(link),
-    linkDirectionalArrowColor: (link) => {
-      // Use the same vibrant color as the link
-      if (link.type === 'potential_link') return '#00ffff';
-      return null; // Match link color
-    },
+    // Disable default arrows
+    linkDirectionalArrowLength: 0,
     
     // Background
     backgroundColor: '#000033'
@@ -281,23 +375,62 @@ const visualizationStyles = {
     },
     nodeThreeObject: null,
     
-    // Link styling
-    linkWidth: (link) => {
+    // Use custom links for gradient connection style
+    linkThreeObject: (link) => {
       const { highlightLinks } = store.getState();
-      return calculateLinkWidth(link, highlightLinks.has(link)) * 1.1; // Slightly thicker for gradient style
+      const isHighlighted = highlightLinks.has(link);
+      
+      // Get link color for arrow color
+      const linkColor = getLinkColor(link);
+      
+      // Parse color to RGB
+      let mainColor = 0x444466; // Default
+      let arrowColor = 0x8888ff; // Default
+      
+      if (linkColor.startsWith('rgba(')) {
+        const components = linkColor.replace('rgba(', '').replace(')', '').split(',');
+        const r = parseInt(components[0].trim());
+        const g = parseInt(components[1].trim());
+        const b = parseInt(components[2].trim());
+        
+        // Use the link color for both line and arrow for gradient style
+        mainColor = (r << 16) | (g << 8) | b;
+        arrowColor = mainColor;
+      }
+      
+      // Calculate arrow length based on link strength
+      const arrowLength = calculateArrowLength(link, isHighlighted) * 1.3; // Slightly larger for gradient style
+      const arrowPosition = calculateArrowPosition(link);
+      const strength = typeof link.strength === 'number' ? link.strength : 0.5;
+      
+      // Create a custom link with gradient colors
+      return createGridStyleLink(link, {x:0,y:0,z:0}, {x:0,y:0,z:0}, {
+        mainColor: mainColor,
+        lineWidth: isHighlighted ? 2.5 : 1.8, // Slightly thicker for gradient style
+        showArrow: true,
+        arrowLength: arrowLength,
+        arrowPosition: arrowPosition,
+        arrowColor: arrowColor,
+        curved: strength > 0.7 // Use curved lines for strong connections
+      });
     },
+    linkPositionUpdate: (obj, { start, end }) => {
+      // Update position of the custom link object
+      if (obj) {
+        updateGridStyleLink(obj, start, end);
+        return true; // Indicate we've handled positioning
+      }
+      return false;
+    },
+    
+    // Keep these for highlighting logic
     linkColor: (link) => getLinkColor(link),
-    linkCurvature: 0.1,
+    linkCurvature: 0,
     linkOpacity: 0.8,
     
-    // Use gradient-colored arrows that match the link color
-    linkDirectionalArrowLength: (link) => {
-      const { highlightLinks } = store.getState();
-      const baseLength = calculateArrowLength(link, highlightLinks.has(link));
-      return baseLength * 1.3; // Slightly larger arrows for gradient style
-    },
-    linkDirectionalArrowRelPos: (link) => calculateArrowPosition(link),
-    linkDirectionalArrowColor: (link) => getLinkColor(link), // Same color as link
+    // Disable default arrows since we have custom ones
+    linkDirectionalArrowLength: 0,
+    linkDirectionalArrowRelPos: 1,
     
     // Background
     backgroundColor: '#000022'
@@ -336,6 +469,30 @@ export function initializeVisualizationManager() {
 }
 
 /**
+ * Toggle between custom and default link renderers
+ * @returns {boolean} New state of custom link renderer (true = custom, false = default)
+ */
+export function toggleCustomLinkRenderer() {
+  useCustomLinkRenderer = !useCustomLinkRenderer;
+  console.log(`Link renderer set to: ${useCustomLinkRenderer ? 'Custom' : 'Default'}`);
+  
+  // Re-apply the current style with the new renderer setting
+  if (activeVisualizationStyle) {
+    applyVisualizationStyle(activeVisualizationStyle);
+  }
+  
+  return useCustomLinkRenderer;
+}
+
+/**
+ * Get the current state of the custom link renderer
+ * @returns {boolean} Current state (true = custom, false = default)
+ */
+export function isUsingCustomLinkRenderer() {
+  return useCustomLinkRenderer;
+}
+
+/**
  * Apply a visualization style to the graph
  * @param {string} styleId - ID of the style to apply
  */
@@ -360,25 +517,40 @@ export function applyVisualizationStyle(styleId) {
     .nodeRelSize(style.nodeRelSize)
     .nodeColor(style.nodeFill)
     .backgroundColor(style.backgroundColor)
-    .linkWidth(style.linkWidth)
     .linkColor(style.linkColor)
     .linkCurvature(style.linkCurvature)
-    .linkOpacity(style.linkOpacity)
+    .linkOpacity(style.linkOpacity);
     
-    // Arrow heads for link direction
-    .linkDirectionalArrowLength(style.linkDirectionalArrowLength)
-    .linkDirectionalArrowRelPos(style.linkDirectionalArrowRelPos)
-    .linkDirectionalArrowColor(style.linkDirectionalArrowColor)
-    
-    // Disable particles by setting to 0
-    .linkDirectionalParticles(0);
+  // Apply different link rendering based on the toggle
+  if (useCustomLinkRenderer) {
+    // Use custom THREE.js object for links
+    graph
+      .linkWidth(0) // Zero width for custom links
+      .linkThreeObject(style.linkThreeObject)
+      .linkThreeObjectExtend(false) // Don't extend the default line - use only our custom object
+      .linkPositionUpdate(style.linkPositionUpdate)
+      .linkDirectionalArrowLength(0); // Disable default arrows
+  } else {
+    // Use default Force3D link renderer
+    graph
+      .linkWidth(style.customLinkWidth || 1.5) // Use width for default links
+      .linkThreeObject(null) // Remove custom objects
+      .linkThreeObjectExtend(true) // Use default line
+      .linkPositionUpdate(null) // No custom position updates
+      .linkDirectionalArrowLength(6) // Use default arrows
+      .linkDirectionalArrowRelPos(0.9);
+  }
+  
+  // Disable particles either way
+  graph.linkDirectionalParticles(0);
   
   // Update currently active style
   activeVisualizationStyle = styleId;
   
-  // Update store
+  // Update store with both the style object and the style ID
   store.update({
-    visualizationStyle: style
+    visualizationStyle: style,
+    visualizationStyleId: styleId
   });
   
   // Trigger a re-render, preserving the timestamp for connection analysis
@@ -410,5 +582,7 @@ export default {
   initializeVisualizationManager,
   applyVisualizationStyle,
   getVisualizationStyles,
-  getActiveVisualizationStyle
+  getActiveVisualizationStyle,
+  toggleCustomLinkRenderer,
+  isUsingCustomLinkRenderer
 };
