@@ -339,7 +339,7 @@ export function handleChangeSelectedNodesDomain() {
   }
   
   // Import domain management
-  import('../../core/domainManagement.js').then(domainModule => {
+  import('../domainManagement.js').then(domainModule => {
     // Get all domains
     const allDomains = store.get('allDomains') || domainModule.collectAllDomains();
     
@@ -526,7 +526,7 @@ export function applyDomainChangeToSelectedNodes(newDomain, pruneEdges = false) 
   // Return a promise that resolves when all updates are complete
   return new Promise((resolve, reject) => {
     // Import domain management
-    import('../../core/domainManagement.js').then(domainModule => {
+    import('../domainManagement.js').then(domainModule => {
       // Create a copy of the array to avoid issues during updates
       const nodesToUpdate = [...multiSelectedNodes];
       let updatedCount = 0;
