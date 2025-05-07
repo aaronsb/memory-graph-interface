@@ -152,7 +152,7 @@ export function updateMemoryDomainsPanel() {
         legend.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.7)';
         legend.style.zIndex = '100';
         legend.style.width = '350px';
-        legend.style.height = 'auto'; /* Make height reactive to content */
+        legend.style.height = 'fit-content'; /* Make height fit exactly to content */
         legend.style.border = '1px solid rgba(100, 100, 255, 0.3)';
         
         // Add to the document
