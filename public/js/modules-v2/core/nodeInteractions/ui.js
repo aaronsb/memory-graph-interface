@@ -7,6 +7,10 @@
 
 import store from '../../state/store.js';
 import { updateCombinedHighlights, updateHighlight } from '../../utils/helpers.js';
+// Import dependencies directly
+import nodeManipulation from './nodeManipulation.js';
+import nodeLinking from './nodeLinking.js';
+import nodeSelection from './nodeSelection.js';
 
 /**
  * Show a custom confirmation dialog
@@ -117,9 +121,7 @@ export function updateSelectionPanel() {
     removeButton.textContent = '✖';
     removeButton.title = 'Remove from selection';
     removeButton.addEventListener('click', () => {
-      import('./nodeSelection.js').then(({ handleMultiSelectNode }) => {
-        handleMultiSelectNode(node);
-      });
+      nodeSelection.handleMultiSelectNode(node);
     });
     
     item.appendChild(itemText);
@@ -172,19 +174,24 @@ export function setupSelectionPanelListeners() {
   const linkButton = document.getElementById('link-selected-btn');
   if (linkButton) {
     linkButton.addEventListener('click', () => {
-      import('./nodeLinking.js').then(({ handleLinkAllSelected }) => {
-        handleLinkAllSelected();
-      });
+      console.log('Link button clicked');
+      nodeLinking.handleLinkAllSelected();
     });
   }
   
   // Change domain button
   const domainButton = document.getElementById('change-domain-btn');
   if (domainButton) {
+    console.log('Setting up domain button click handler');
     domainButton.addEventListener('click', () => {
-      import('./nodeManipulation.js').then(({ handleChangeSelectedNodesDomain }) => {
-        handleChangeSelectedNodesDomain();
-      });
+      console.log('Domain button clicked!');
+      // Direct function call instead of dynamic import
+      try {
+        nodeManipulation.handleChangeSelectedNodesDomain();
+      } catch (error) {
+        console.error('Error in handleChangeSelectedNodesDomain:', error);
+        alert('Error changing domain: ' + error.message);
+      }
     });
   }
 }
