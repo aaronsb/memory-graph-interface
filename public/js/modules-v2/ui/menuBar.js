@@ -7,6 +7,7 @@ import { toggleBloomEffect, toggleSummariesOnNodes, toggleEdgeLabels, toggleZoom
 import { toggleMemoryDomainsPanel } from '../core/domainManagement/ui.js';
 import { toggleReferencePlane } from '../core/graph/referencePlane.js';
 import { refreshDataFromDatabaseChange } from '../utils/webSocketService.js';
+import { applyVisualizationStyle, getVisualizationStyles, getActiveVisualizationStyle } from '../core/visualizationManager.js';
 
 // Cache DOM elements
 let menuBarElement = null;
@@ -727,9 +728,46 @@ export function initMenuBar() {
       })
     );
     
+    // 4. Visualization Menu
+    const { category: visualizationCategory, dropdown: visualizationDropdown } = createMenuCategory('Visualization');
+    
+    // Get all available visualization styles
+    const visualizationStyles = getVisualizationStyles();
+    const activeStyle = getActiveVisualizationStyle();
+    
+    // Add items to Visualization dropdown
+    visualizationStyles.forEach(style => {
+      const isActive = style.id === activeStyle;
+      const styleItem = createDropdownItem(style.name, () => {
+        // Apply the selected style
+        applyVisualizationStyle(style.id);
+        
+        // Update all menu items
+        visualizationStyles.forEach(s => {
+          updateMenuItemState(`visualization-style-${s.id}`, s.id === style.id);
+        });
+      }, false, true, isActive);
+      
+      styleItem.id = `visualization-style-${style.id}`;
+      visualizationDropdown.appendChild(styleItem);
+    });
+    
+    // Add separator
+    addSeparator(visualizationDropdown);
+    
+    // Add custom style option (future enhancement)
+    visualizationDropdown.appendChild(
+      createDropdownItem('Custom Style (Coming Soon)', () => {
+        console.log('Custom visualization style not yet implemented');
+      }, true)
+    );
+    
+    // 5. Help Menu - reuse the existing help menu
+    
     // Add categories to menu bar
     menuBarElement.appendChild(fileCategory);
     menuBarElement.appendChild(viewCategory);
+    menuBarElement.appendChild(visualizationCategory);
     menuBarElement.appendChild(panelsCategory);
     menuBarElement.appendChild(helpCategory);
     
@@ -757,6 +795,12 @@ export function setupMenuStateListeners() {
   updateMenuItemState('toggle-edge-labels', store.get('showEdgeLabels'));
   updateMenuItemState('toggle-zoom-on-select', store.get('zoomOnSelect'));
   updateMenuItemState('toggle-reference-plane', store.get('referencePlane')?.visible || false);
+  
+  // Visualization Menu States
+  const activeStyle = getActiveVisualizationStyle();
+  getVisualizationStyles().forEach(style => {
+    updateMenuItemState(`visualization-style-${style.id}`, style.id === activeStyle);
+  });
   
   // Panels Menu States  
   

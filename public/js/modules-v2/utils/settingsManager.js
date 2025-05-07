@@ -19,6 +19,9 @@ const DEFAULT_SETTINGS = {
   zoomOnSelect: false,
   showHelpCard: true,
   
+  // Visualization settings
+  visualizationStyle: 'simple',
+  
   // Database settings
   databasePathHistory: [],
   
@@ -82,6 +85,9 @@ export function saveAllSettings() {
       zoomOnSelect: state.zoomOnSelect,
       showHelpCard: state.showHelpCard,
       
+      // Visualization settings
+      visualizationStyle: state.visualizationStyle?.id || 'simple',
+      
       // Database settings
       databasePathHistory: state.databasePathHistory || [],
       
@@ -142,7 +148,10 @@ export function saveUIState() {
       showSummariesOnNodes: state.showSummariesOnNodes,
       showEdgeLabels: state.showEdgeLabels,
       zoomOnSelect: state.zoomOnSelect,
-      showHelpCard: state.showHelpCard
+      showHelpCard: state.showHelpCard,
+      
+      // Visualization settings
+      visualizationStyle: state.visualizationStyle?.id || 'simple'
     };
     
     // Save to localStorage
@@ -186,7 +195,8 @@ export function setupSettingsEventListeners() {
       'showEdgeLabels', 
       'zoomOnSelect', 
       'showHelpCard',
-      'databasePathHistory'
+      'databasePathHistory',
+      'visualizationStyle'
     ];
     
     const hasChanged = settingsKeys.some(key => 

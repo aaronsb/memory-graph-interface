@@ -19,6 +19,7 @@ import * as helpers from './utils/helpers.js';
 import * as eventBus from './utils/eventBus.js';
 import * as settingsManager from './utils/settingsManager.js';
 import * as webSocketService from './utils/webSocketService.js';
+import * as visualizationManager from './core/visualizationManager.js';
 
 // Export for direct importing
 export {
@@ -36,7 +37,8 @@ export {
   helpers,
   eventBus,
   settingsManager,
-  webSocketService
+  webSocketService,
+  visualizationManager
 };
 
 // Default export for importing everything at once
@@ -55,5 +57,6 @@ export default {
   helpers,
   eventBus,
   settingsManager,
-  webSocketService
+  webSocketService,
+  visualizationManager
 };

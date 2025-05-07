@@ -15,7 +15,8 @@ import {
   contextMenu,
   windowManager,
   menuBar,
-  helpers 
+  helpers,
+  visualizationManager
 } from './modules-v2/index.js';
 
 // Import WebSocket service
@@ -158,6 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
       menuBar,
       helpers,
       webSocketService,
+      visualizationManager,
       getState: () => store.getState()
     };
     

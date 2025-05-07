@@ -6,6 +6,7 @@
 
 import store from '../state/store.js';
 import { updateHighlight } from '../utils/helpers.js';
+import { applyVisualizationStyle } from '../core/visualizationManager.js';
 
 /**
  * Toggle bloom effect on/off
@@ -235,6 +236,17 @@ export function applyUIState(uiState) {
     if (domainLegend) {
       domainLegend.style.display = uiState.domainLegendVisible ? 'block' : 'none';
     }
+  }
+  
+  // Apply visualization style if specified
+  if (uiState.visualizationStyle) {
+    // Import and apply style once graph is available
+    setTimeout(() => {
+      const graph = store.get('graph');
+      if (graph) {
+        applyVisualizationStyle(uiState.visualizationStyle);
+      }
+    }, 200); // Small delay to ensure graph is fully initialized
   }
   
   // Refresh graph if needed

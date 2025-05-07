@@ -10,6 +10,7 @@ import { setupNodeInteractions } from './interactions.js';
 import { setupLinkInteractions } from './interactions.js';
 import { setupDragHandling } from './dragHandling.js';
 import { addReferencePlane } from './referencePlane.js';
+import { initializeVisualizationManager, applyVisualizationStyle } from '../visualizationManager.js';
 
 /**
  * Initialize the 3D force graph
@@ -17,6 +18,9 @@ import { addReferencePlane } from './referencePlane.js';
  */
 export function initGraph() {
   console.log('Initializing 3D force graph');
+  
+  // Initialize visualization manager before creating the graph
+  initializeVisualizationManager();
   
   // Create the 3D force graph with basic configuration
   const graph = ForceGraph3D({ controlType: 'orbit' })
@@ -105,6 +109,10 @@ export function initGraph() {
   store.update({
     graph
   });
+  
+  // Apply the saved visualization style after graph is initialized
+  const activeStyle = store.get('visualizationStyle')?.id || 'simple';
+  applyVisualizationStyle(activeStyle);
   
   return graph;
 }
