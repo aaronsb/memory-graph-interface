@@ -10,6 +10,11 @@ import { getNodeColor, getLinkColor } from '../utils/helpers.js';
 import { initializeDomainColors } from './domainManagement/colorManagement.js';
 import { getComplementaryColor, blendColors } from '../utils/colorUtils.js';
 import { 
+  calculateLinkWidth, 
+  calculateArrowLength, 
+  calculateArrowPosition 
+} from '../utils/linkUtils.js';
+import { 
   calculateNodeConnectionCounts, 
   calculateDomainNormalizationFactors, 
   getNormalizedConnectionFactor 
@@ -31,14 +36,19 @@ const visualizationStyles = {
     // Link styling
     linkWidth: (link) => {
       const { highlightLinks } = store.getState();
-      return highlightLinks.has(link) ? 5 : 2.5;
+      return calculateLinkWidth(link, highlightLinks.has(link));
     },
     linkColor: (link) => getLinkColor(link),
     linkCurvature: 0,
-    linkDirectionalParticles: (link) => Math.round(8 * (link.strength || 0.5)),
-    linkDirectionalParticleWidth: 4,
-    linkDirectionalParticleSpeed: (link) => 0.00167 * link.strength,
-    linkOpacity: 1,
+    linkOpacity: 0.8,
+    
+    // Use arrow heads for link direction
+    linkDirectionalArrowLength: (link) => {
+      const { highlightLinks } = store.getState();
+      return calculateArrowLength(link, highlightLinks.has(link));
+    },
+    linkDirectionalArrowRelPos: (link) => calculateArrowPosition(link),
+    linkDirectionalArrowColor: (link) => getLinkColor(link),
     
     // Background
     backgroundColor: '#000020'
@@ -62,11 +72,19 @@ const visualizationStyles = {
     nodeThreeObject: null,
     
     // Link styling
-    linkWidth: 1.5,
+    linkWidth: (link) => calculateLinkWidth(link, false) * 0.7, // Slightly thinner for minimalist style
     linkColor: () => 'rgba(200, 200, 200, 0.4)', // All links same color
     linkCurvature: 0,
-    linkDirectionalParticles: 0, // No particles
-    linkDirectionalParticleWidth: 0,
+    linkOpacity: 0.5,
+    
+    // Subtle arrow heads for direction
+    linkDirectionalArrowLength: (link) => {
+      // Minimal arrows for minimalist style
+      const strength = typeof link.strength === 'number' ? link.strength : 0.5;
+      return strength > 0.5 ? 4 : (strength > 0.2 ? 2 : 0);
+    },
+    linkDirectionalArrowRelPos: 0.92, // Position close to the end
+    linkDirectionalArrowColor: () => 'rgba(200, 200, 200, 0.6)', // Slightly brighter than links
     linkOpacity: 0.4,
     
     // Background
@@ -102,7 +120,7 @@ const visualizationStyles = {
     // Link styling
     linkWidth: (link) => {
       const { highlightLinks } = store.getState();
-      return highlightLinks.has(link) ? 6 : 3;
+      return calculateLinkWidth(link, highlightLinks.has(link)) * 1.2; // Slightly thicker for network style
     },
     linkColor: (link) => {
       // More vibrant link colors
@@ -120,10 +138,20 @@ const visualizationStyles = {
       }
     },
     linkCurvature: 0.1, // Slight curvature
-    linkDirectionalParticles: (link) => Math.round(12 * (link.strength || 0.5)),
-    linkDirectionalParticleWidth: 5,
-    linkDirectionalParticleSpeed: (link) => 0.003 * link.strength,
     linkOpacity: 0.85,
+    
+    // Use bold, colorful arrows for the network style
+    linkDirectionalArrowLength: (link) => {
+      const { highlightLinks } = store.getState();
+      const baseLength = calculateArrowLength(link, highlightLinks.has(link));
+      return baseLength * 1.5; // Larger arrows for network style
+    },
+    linkDirectionalArrowRelPos: (link) => calculateArrowPosition(link),
+    linkDirectionalArrowColor: (link) => {
+      // Use the same vibrant color as the link
+      if (link.type === 'potential_link') return '#00ffff';
+      return null; // Match link color
+    },
     
     // Background
     backgroundColor: '#000033'
@@ -256,14 +284,20 @@ const visualizationStyles = {
     // Link styling
     linkWidth: (link) => {
       const { highlightLinks } = store.getState();
-      return highlightLinks.has(link) ? 5 : Math.max(1, 3 * (link.strength || 0.5));
+      return calculateLinkWidth(link, highlightLinks.has(link)) * 1.1; // Slightly thicker for gradient style
     },
     linkColor: (link) => getLinkColor(link),
     linkCurvature: 0.1,
-    linkDirectionalParticles: (link) => Math.round(10 * (link.strength || 0.5)),
-    linkDirectionalParticleWidth: 4,
-    linkDirectionalParticleSpeed: (link) => 0.002 * link.strength,
     linkOpacity: 0.8,
+    
+    // Use gradient-colored arrows that match the link color
+    linkDirectionalArrowLength: (link) => {
+      const { highlightLinks } = store.getState();
+      const baseLength = calculateArrowLength(link, highlightLinks.has(link));
+      return baseLength * 1.3; // Slightly larger arrows for gradient style
+    },
+    linkDirectionalArrowRelPos: (link) => calculateArrowPosition(link),
+    linkDirectionalArrowColor: (link) => getLinkColor(link), // Same color as link
     
     // Background
     backgroundColor: '#000022'
@@ -329,10 +363,15 @@ export function applyVisualizationStyle(styleId) {
     .linkWidth(style.linkWidth)
     .linkColor(style.linkColor)
     .linkCurvature(style.linkCurvature)
-    .linkDirectionalParticles(style.linkDirectionalParticles)
-    .linkDirectionalParticleWidth(style.linkDirectionalParticleWidth)
-    .linkDirectionalParticleSpeed(style.linkDirectionalParticleSpeed)
-    .linkOpacity(style.linkOpacity);
+    .linkOpacity(style.linkOpacity)
+    
+    // Arrow heads for link direction
+    .linkDirectionalArrowLength(style.linkDirectionalArrowLength)
+    .linkDirectionalArrowRelPos(style.linkDirectionalArrowRelPos)
+    .linkDirectionalArrowColor(style.linkDirectionalArrowColor)
+    
+    // Disable particles by setting to 0
+    .linkDirectionalParticles(0);
   
   // Update currently active style
   activeVisualizationStyle = styleId;
