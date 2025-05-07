@@ -2,15 +2,15 @@
   "name": "memory-graph-interface",
   "version": "1.0.0",
   "description": "A visualization tool for memory graph database",
-  "main": "server.js",
+  "main": "src/server.js",
   "scripts": {
     "# Development": "-------------------------------------------------------------",
     "dev": "npm run build:js && concurrently \"npm run server\" \"npm run watch\"",
     "watch": "webpack --watch",
-    "server": "node server.js",
+    "server": "node src/server.js",
     
     "# Production": "-------------------------------------------------------------",
-    "start": "npm run build:js && node server.js",
+    "start": "npm run build:js && node src/server.js",
     "build": "npm run build:js:prod",
     
     "# Build Tools": "-------------------------------------------------------------",
