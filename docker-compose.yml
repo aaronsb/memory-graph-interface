@@ -2,10 +2,10 @@ version: '3.8'
 
 services:
   memory-graph-interface:
+    image: memory-graph-interface:latest
     build:
       context: .
       dockerfile: Dockerfile
-    image: memory-graph-interface:latest
     container_name: memory-graph-interface
     ports:
       - "3000:3000"
