@@ -2,17 +2,27 @@
   "name": "memory-graph-interface",
   "version": "1.0.0",
   "description": "A visualization tool for memory graph database",
-  "main": "server.js",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node server.js",
-    "build": "docker build -t memory-graph-interface:latest .",
-    "docker:start": "docker-compose up -d",
-    "docker:stop": "docker-compose down",
+    "# Development": "-------------------------------------------------------------",
+    "dev": "npm run build:js && concurrently \"npm run server\" \"npm run watch\"",
+    "watch": "webpack --watch",
+    "server": "node src/server.js",
+    
+    "# Production": "-------------------------------------------------------------",
+    "start": "npm run build:js && node src/server.js",
+    "build": "npm run build:js:prod",
+    
+    "# Build Tools": "-------------------------------------------------------------",
     "build:js": "webpack",
     "build:js:prod": "NODE_ENV=production webpack",
     "extract-modules": "node scripts/extract-modules.js",
-    "watch": "webpack --watch",
-    "dev": "concurrently \"npm run start\" \"npm run watch\""
+    
+    "# Docker Tools": "-------------------------------------------------------------",
+    "docker:build": "docker build -t memory-graph-interface:latest .",
+    "docker:start": "docker-compose up -d",
+    "docker:stop": "docker-compose down",
+    "docker:logs": "docker-compose logs -f memory-graph-interface"
   },
   "dependencies": {
     "dotenv": "^16.5.0",

@@ -9,6 +9,7 @@ import store from '../../state/store.js';
 import { updateCombinedHighlights, updateHighlight } from '../../utils/helpers.js';
 import { clearNodeFromSelections } from './nodeSelection.js';
 import { showCustomConfirmDialog } from './ui.js';
+import domainManagement from '../domainManagement.js';
 
 /**
  * Show the tag input for a node
@@ -338,11 +339,19 @@ export function handleChangeSelectedNodesDomain() {
     return;
   }
   
-  // Import domain management
-  import('../../core/domainManagement.js').then(domainModule => {
-    // Get all domains
-    const allDomains = store.get('allDomains') || domainModule.collectAllDomains();
-    
+  // Get all domains using the imported module
+  const allDomains = store.get('allDomains') || [];
+  
+  // If no domains in store, fetch them
+  let domainPromise;
+  if (allDomains.length === 0) {
+    domainPromise = domainManagement.collectAllDomains();
+  } else {
+    domainPromise = Promise.resolve(allDomains);
+  }
+  
+  // Continue with domain handling after ensuring domains are available
+  domainPromise.then(domains => {
     // Create a simple modal for domain selection
     const modal = document.createElement('div');
     modal.style.position = 'fixed';
@@ -525,15 +534,13 @@ export function applyDomainChangeToSelectedNodes(newDomain, pruneEdges = false) 
   
   // Return a promise that resolves when all updates are complete
   return new Promise((resolve, reject) => {
-    // Import domain management
-    import('../../core/domainManagement.js').then(domainModule => {
-      // Create a copy of the array to avoid issues during updates
-      const nodesToUpdate = [...multiSelectedNodes];
-      let updatedCount = 0;
-      let errorCount = 0;
-      
-      // Update each node
-      const updatePromises = nodesToUpdate.map(node => {
+    // Create a copy of the array to avoid issues during updates
+    const nodesToUpdate = [...multiSelectedNodes];
+    let updatedCount = 0;
+    let errorCount = 0;
+    
+    // Update each node
+    const updatePromises = nodesToUpdate.map(node => {
         // Skip if domain is already set to the new value
         if (node.domain === newDomain) {
           console.log(`Node ${node.id} already has domain ${newDomain}`);
@@ -607,8 +614,8 @@ export function applyDomainChangeToSelectedNodes(newDomain, pruneEdges = false) 
           // Update memory domains panel if the domain is new
           const allDomains = store.get('allDomains') || [];
           if (!allDomains.includes(newDomain)) {
-            domainModule.collectAllDomains().then(() => {
-              domainModule.updateMemoryDomainsPanel();
+            domainManagement.collectAllDomains().then(() => {
+              domainManagement.updateMemoryDomainsPanel();
             });
           }
           
@@ -623,10 +630,6 @@ export function applyDomainChangeToSelectedNodes(newDomain, pruneEdges = false) 
           console.error('Error processing domain updates:', error);
           reject(error);
         });
-    }).catch(error => {
-      console.error('Error importing domain management module:', error);
-      reject(error);
-    });
   });
 }
 

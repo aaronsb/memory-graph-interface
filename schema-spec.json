@@ -1,0 +1,151 @@
+{
+  "version": "1.0.0",
+  "description": "Memory Graph Database Schema Specification",
+  "tables": {
+    "MEMORY_NODES": {
+      "description": "Stores individual memory nodes with content and domain information",
+      "columns": {
+        "id": {
+          "type": "TEXT",
+          "constraints": ["PRIMARY KEY"],
+          "description": "Unique identifier for the node"
+        },
+        "content": {
+          "type": "TEXT",
+          "description": "Main content of the memory node"
+        },
+        "content_summary": {
+          "type": "TEXT",
+          "optional": true,
+          "description": "Optional summary of the content"
+        },
+        "domain": {
+          "type": "TEXT",
+          "description": "The domain this node belongs to"
+        },
+        "path": {
+          "type": "TEXT",
+          "optional": true,
+          "description": "Optional file path reference"
+        },
+        "timestamp": {
+          "type": "TEXT",
+          "description": "Creation timestamp in ISO format"
+        }
+      }
+    },
+    "MEMORY_EDGES": {
+      "description": "Defines connections (edges) between memory nodes",
+      "columns": {
+        "id": {
+          "type": "TEXT",
+          "constraints": ["PRIMARY KEY"],
+          "description": "Unique identifier for the edge"
+        },
+        "source": {
+          "type": "TEXT",
+          "constraints": ["FOREIGN KEY REFERENCES MEMORY_NODES(id)"],
+          "description": "Source node ID"
+        },
+        "target": {
+          "type": "TEXT",
+          "constraints": ["FOREIGN KEY REFERENCES MEMORY_NODES(id)"],
+          "description": "Target node ID"
+        },
+        "type": {
+          "type": "TEXT",
+          "description": "Relationship type (e.g., \"reference\", \"association\")"
+        },
+        "strength": {
+          "type": "REAL",
+          "description": "Strength of the relationship (0.0 to 1.0)"
+        },
+        "timestamp": {
+          "type": "TEXT",
+          "description": "Creation timestamp in ISO format"
+        },
+        "domain": {
+          "type": "TEXT",
+          "description": "Domain this edge belongs to"
+        }
+      }
+    },
+    "MEMORY_TAGS": {
+      "description": "Contains tags associated with memory nodes",
+      "columns": {
+        "nodeId": {
+          "type": "TEXT",
+          "constraints": ["FOREIGN KEY REFERENCES MEMORY_NODES(id)"],
+          "description": "Node ID the tag belongs to"
+        },
+        "tag": {
+          "type": "TEXT",
+          "description": "Tag content"
+        }
+      },
+      "constraints": [
+        "PRIMARY KEY (nodeId, tag)"
+      ]
+    },
+    "DOMAINS": {
+      "description": "Lists available memory domains",
+      "columns": {
+        "id": {
+          "type": "TEXT",
+          "constraints": ["PRIMARY KEY"],
+          "description": "Unique identifier for the domain"
+        },
+        "name": {
+          "type": "TEXT",
+          "description": "Display name of the domain"
+        },
+        "description": {
+          "type": "TEXT",
+          "description": "Domain description"
+        },
+        "created": {
+          "type": "TEXT",
+          "description": "Creation timestamp in ISO format"
+        },
+        "lastAccess": {
+          "type": "TEXT",
+          "description": "Last access timestamp in ISO format"
+        }
+      }
+    },
+    "DOMAIN_REFS": {
+      "description": "Defines cross-domain references between nodes",
+      "columns": {
+        "nodeId": {
+          "type": "TEXT",
+          "constraints": ["FOREIGN KEY REFERENCES MEMORY_NODES(id)"],
+          "description": "Source node ID"
+        },
+        "domain": {
+          "type": "TEXT",
+          "description": "Source domain"
+        },
+        "targetNodeId": {
+          "type": "TEXT",
+          "constraints": ["FOREIGN KEY REFERENCES MEMORY_NODES(id)"],
+          "description": "Target node ID"
+        },
+        "targetDomain": {
+          "type": "TEXT",
+          "description": "Target domain"
+        },
+        "description": {
+          "type": "TEXT",
+          "description": "Description of the reference"
+        },
+        "bidirectional": {
+          "type": "BOOLEAN",
+          "description": "If true, relationship goes both ways"
+        }
+      },
+      "constraints": [
+        "PRIMARY KEY (nodeId, targetNodeId)"
+      ]
+    }
+  }
+}
