@@ -8,9 +8,9 @@
 import store from '../../state/store.js';
 import { updateCombinedHighlights, updateHighlight } from '../../utils/helpers.js';
 // Import dependencies directly
-import nodeManipulation from './nodeManipulation.js';
 import nodeLinking from './nodeLinking.js';
 import nodeSelection from './nodeSelection.js';
+import domainDialog from './domainDialog.js';
 
 /**
  * Show a custom confirmation dialog
@@ -182,16 +182,50 @@ export function setupSelectionPanelListeners() {
   // Change domain button
   const domainButton = document.getElementById('change-domain-btn');
   if (domainButton) {
-    console.log('Setting up domain button click handler');
+    console.log('Setting up domain button click handler with new implementation');
     domainButton.addEventListener('click', () => {
-      console.log('Domain button clicked!');
-      // Direct function call instead of dynamic import
-      try {
-        nodeManipulation.handleChangeSelectedNodesDomain();
-      } catch (error) {
-        console.error('Error in handleChangeSelectedNodesDomain:', error);
-        alert('Error changing domain: ' + error.message);
+      console.log('Domain button clicked! Using new implementation.');
+      
+      // Get the selected nodes
+      const { multiSelectedNodes } = store.getState();
+      
+      if (!multiSelectedNodes || multiSelectedNodes.length === 0) {
+        console.log('No nodes selected for domain change');
+        return;
       }
+      
+      console.log(`Showing domain dialog for ${multiSelectedNodes.length} nodes`);
+      
+      // Show domain selection dialog
+      domainDialog.showDomainSelectionDialog(multiSelectedNodes)
+        .then(result => {
+          console.log('Domain change completed:', result);
+          if (!result.cancelled) {
+            // Success notification
+            const notification = document.createElement('div');
+            notification.textContent = `Domain updated for ${result.updatedCount} nodes`;
+            notification.style.position = 'fixed';
+            notification.style.bottom = '20px';
+            notification.style.right = '20px';
+            notification.style.backgroundColor = 'rgba(92, 184, 92, 0.9)';
+            notification.style.color = '#fff';
+            notification.style.padding = '10px 20px';
+            notification.style.borderRadius = '5px';
+            notification.style.zIndex = '1000';
+            document.body.appendChild(notification);
+            
+            // Remove notification after 3 seconds
+            setTimeout(() => {
+              if (document.body.contains(notification)) {
+                document.body.removeChild(notification);
+              }
+            }, 3000);
+          }
+        })
+        .catch(error => {
+          console.error('Error in domain change:', error);
+          alert('Error changing domain: ' + (error.message || 'Unknown error'));
+        });
     });
   }
 }
