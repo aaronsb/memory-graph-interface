@@ -45,36 +45,37 @@ export function initGraph() {
     .linkOpacity(1)
     .linkCurvature(0)
     
-    // Link labels
+    // Link labels are always enabled for tooltips
     .linkLabel(link => `${link.type} (${link.strength.toFixed(2)})`)
-    .linkThreeObjectExtend(true)
-    .linkThreeObject(link => {
-      const { showEdgeLabels } = store.getState();
-      
-      if (showEdgeLabels && typeof SpriteText !== 'undefined') {
-        const sprite = new SpriteText(link.type);
-        sprite.color = 'white';
-        sprite.textHeight = 4;
-        sprite.backgroundColor = 'rgba(0,0,0,0.7)';
-        sprite.padding = 3;
-        return sprite;
-      }
-      
-      return null;
-    })
+    .linkThreeObjectExtend(true);
     
-    // Position link objects (labels)
-    .linkPositionUpdate((sprite, { start, end }) => {
-      if (sprite) {
-        // Position the sprite at the middle of the link
-        const middlePos = {
-          x: start.x + (end.x - start.x) / 2,
-          y: start.y + (end.y - start.y) / 2,
-          z: start.z + (end.z - start.z) / 2
-        };
-        Object.assign(sprite.position, middlePos);
-      }
-    });
+  // Apply edge labels if enabled in store
+  const showEdgeLabels = store.get('showEdgeLabels');
+  if (showEdgeLabels) {
+    graph
+      .linkThreeObject(link => {
+        if (typeof SpriteText !== 'undefined') {
+          const sprite = new SpriteText(link.type);
+          sprite.color = 'white';
+          sprite.textHeight = 4;
+          sprite.backgroundColor = 'rgba(0,0,0,0.7)';
+          sprite.padding = 3;
+          return sprite;
+        }
+        return null;
+      })
+      .linkPositionUpdate((sprite, { start, end }) => {
+        if (sprite) {
+          // Position the sprite at the middle of the link
+          const middlePos = {
+            x: start.x + (end.x - start.x) / 2,
+            y: start.y + (end.y - start.y) / 2,
+            z: start.z + (end.z - start.z) / 2
+          };
+          Object.assign(sprite.position, middlePos);
+        }
+      });
+  }
   
   // Set up node 3D objects
   setupNodeThreeObjects(graph);
@@ -97,10 +98,10 @@ export function initGraph() {
     position: { x: 0, y: -200, z: 0 }, // Initial position, will be adjusted after data loads
     size: 2000,
     divisions: 50,
-    color1: 0x444466,
-    color2: 0x222244,
-    planeColor: 0x080820,
-    planeOpacity: 0.1,
+    color1: 0x444466, // Standard grid color
+    color2: 0x222244, // Standard secondary grid color
+    planeColor: 0x080820, // Standard plane color
+    planeOpacity: 0.1, // Standard plane opacity
     visible: true,
     autoAdjust: true // Enable automatic adjustment
   });

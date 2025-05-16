@@ -43,7 +43,7 @@ export function addReferencePlane(graph, options = {}) {
   gridHelper.visible = config.visible;
   gridHelper.name = 'gridHelper'; // For identification
   
-  // If we want a semi-transparent plane as well
+  // Create a semi-transparent plane for better visual reference
   const planeGeometry = new THREE.PlaneGeometry(config.size, config.size);
   const planeMaterial = new THREE.MeshBasicMaterial({
     color: config.planeColor,

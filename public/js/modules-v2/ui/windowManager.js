@@ -548,6 +548,15 @@ export function initializeDraggableWindows() {
     });
   }
   
+  // About dialog (if it exists)
+  const aboutDialog = document.getElementById('about-dialog');
+  if (aboutDialog) {
+    makeDraggable('about-dialog', {
+      controls: [], // No custom controls needed, close button is already added
+      addHeader: false // We've already added a header with the class window-header
+    });
+  }
+  
   // Make context menu draggable but don't add header
   // Context menu needs special handling
   makeDraggable('context-menu', {

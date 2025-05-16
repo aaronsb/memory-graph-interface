@@ -105,13 +105,48 @@ export function applyVisualizationStyle(styleId) {
     .linkColor(style.linkColor)
     .linkCurvature(style.linkCurvature)
     .linkOpacity(style.linkOpacity)
-    .linkThreeObject(null) // No custom objects
-    .linkThreeObjectExtend(true) // Enable default line rendering
-    .linkPositionUpdate(null) // No custom position updates
     .linkResolution(6) // Higher resolution for smoother lines
     .linkDirectionalArrowLength(style.linkDirectionalArrowLength)
     .linkDirectionalArrowRelPos(style.linkDirectionalArrowRelPos)
     .linkDirectionalParticles(0); // No particles
+    
+  // Handle edge labels separately - preserve showEdgeLabels setting
+  const showEdgeLabels = store.get('showEdgeLabels');
+  if (showEdgeLabels) {
+    // Create link labels using SpriteText
+    graph.linkThreeObject(link => {
+      if (typeof SpriteText !== 'undefined') {
+        const sprite = new SpriteText(link.type);
+        sprite.color = 'white';
+        sprite.textHeight = 4;
+        sprite.backgroundColor = 'rgba(0,0,0,0.7)';
+        sprite.padding = 3;
+        return sprite;
+      }
+      return null;
+    });
+    
+    // Position link labels at the middle of links
+    graph.linkPositionUpdate((sprite, { start, end }) => {
+      if (sprite) {
+        // Position the sprite at the middle of the link
+        const middlePos = {
+          x: start.x + (end.x - start.x) / 2,
+          y: start.y + (end.y - start.y) / 2,
+          z: start.z + (end.z - start.z) / 2
+        };
+        Object.assign(sprite.position, middlePos);
+      }
+    });
+    
+    // Ensure the link line is still rendered
+    graph.linkThreeObjectExtend(true);
+  } else {
+    // No edge labels
+    graph.linkThreeObject(null);
+    graph.linkPositionUpdate(null);
+    graph.linkThreeObjectExtend(true);
+  }
   
   // Update currently active style
   activeVisualizationStyle = styleId;
