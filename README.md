@@ -4,6 +4,24 @@ A 3D visualization interface for exploring and interacting with memory graphs cr
 
 ![Memory Graph Visualizer](docs/screenshot-nodes.png)
 
+*The Memory Graph Interface with all UI panels enabled. The visualization shows a 3D force-directed graph with nodes colored by domain, connected by labeled edges. Multiple panels provide control over visualization settings, node information, and graph navigation. The interface includes a CUA-style menu bar for easy access to all features.*
+
+## User Interface Components
+
+The screenshot above displays the full feature set of the Memory Graph Interface:
+
+- **3D Graph Visualization**: Central force-directed graph showing memory nodes color-coded by domain with labeled relationship connections
+- **CUA Menu Bar**: Standard application menu (File, View, Visualization, Panels, Help) for easy access to all features
+- **Selected Nodes Panel**: Track and manage multiple node selections with batch operations
+- **Node Info Panel**: Detailed view of selected node content, tags, and metadata
+- **Memory Domains Panel**: Legend showing domain colors with node counts and selection tools
+- **Visualization Controls**: Advanced settings for physics simulation, rendering effects, and visual style
+- **Help Card**: Quick reference for keyboard shortcuts and mouse controls (togglable)
+- **Export/Import Features**: Domain-level data portability through the File menu
+- **Real-time Updates**: Database change indicator in menu bar with auto-refresh capability
+
+Note: Not all panels need to be visible at once - toggle them as needed through the Panels menu.
+
 ## Overview
 
 Memory Graph Interface is a companion application to the [memory-graph MCP](https://github.com/aaronsb/memory-graph) which creates and manages memory nodes. This interface provides a powerful 3D visualization of memory nodes and their relationships, allowing for intuitive exploration and manipulation of the memory graph.
