@@ -288,28 +288,53 @@ export function handleDeleteEmptyDomain(domain) {
     return;
   }
   
-  // Log instead of confirmation dialog
-  console.log(`Deleting empty domain "${domain}"`);
-  // No confirmation needed, proceed directly
-  
-  // Remove the domain from the list
-  const allDomains = store.get('allDomains') || [];
-  const domainIndex = allDomains.indexOf(domain);
-  if (domainIndex !== -1) {
-    allDomains.splice(domainIndex, 1);
-    store.set('allDomains', allDomains);
+  // Confirm deletion with user
+  if (!confirm(`Are you sure you want to delete the domain "${domain}"?`)) {
+    return;
   }
   
-  // Remove the domain color
-  import('./colorManagement.js').then(colors => {
-    colors.removeDomainColor(domain);
-    
-    // Update the legend
-    import('./ui.js').then(ui => {
-      ui.updateMemoryDomainsPanel();
-    });
-    
-    console.log(`Deleted empty domain: ${domain}`);
+  console.log(`Deleting empty domain "${domain}"`);
+  
+  // Delete domain via API
+  fetch(`/api/domains/${domain}`, {
+    method: 'DELETE'
+  })
+  .then(response => response.json())
+  .then(result => {
+    if (result.success) {
+      console.log('Domain deleted successfully from database');
+      
+      // Remove the domain from the list
+      const allDomains = store.get('allDomains') || [];
+      const domainIndex = allDomains.indexOf(domain);
+      if (domainIndex !== -1) {
+        allDomains.splice(domainIndex, 1);
+        store.set('allDomains', allDomains);
+      }
+      
+      // Remove the domain color
+      import('./colorManagement.js').then(colors => {
+        colors.removeDomainColor(domain);
+        
+        // Update the legend
+        import('./ui.js').then(ui => {
+          ui.updateMemoryDomainsPanel();
+        });
+        
+        console.log(`Deleted empty domain: ${domain}`);
+      });
+    } else {
+      console.error('Failed to delete domain:', result.error);
+      if (result.nodeCount) {
+        alert(`Cannot delete domain "${domain}" - it contains ${result.nodeCount} nodes`);
+      } else {
+        alert('Failed to delete domain: ' + (result.error || 'Unknown error'));
+      }
+    }
+  })
+  .catch(error => {
+    console.error('Error deleting domain:', error);
+    alert('Error deleting domain: ' + error.message);
   });
 }
 

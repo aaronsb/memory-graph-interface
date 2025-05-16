@@ -15,10 +15,15 @@ import * as contextMenu from './ui/contextMenu.js';
 import * as windowManager from './ui/windowManager.js';
 import * as menuBar from './ui/menuBar.js';
 import * as fileDialog from './ui/fileDialog.js';
+import * as visualizationControlsPanel from './ui/visualizationControlsPanel.js';
 import * as helpers from './utils/helpers.js';
 import * as eventBus from './utils/eventBus.js';
 import * as settingsManager from './utils/settingsManager.js';
 import * as webSocketService from './utils/webSocketService.js';
+import * as visualizationManager from './core/visualizationManager.js';
+import * as colorUtils from './utils/colorUtils.js';
+import * as linkUtils from './utils/linkUtils.js';
+import * as connectionAnalysis from './core/graph/connectionAnalysis.js';
 
 // Export for direct importing
 export {
@@ -33,10 +38,15 @@ export {
   windowManager,
   menuBar,
   fileDialog,
+  visualizationControlsPanel,
   helpers,
   eventBus,
   settingsManager,
-  webSocketService
+  webSocketService,
+  visualizationManager,
+  colorUtils,
+  linkUtils,
+  connectionAnalysis
 };
 
 // Default export for importing everything at once
@@ -52,8 +62,13 @@ export default {
   windowManager,
   menuBar,
   fileDialog,
+  visualizationControlsPanel,
   helpers,
   eventBus,
   settingsManager,
-  webSocketService
+  webSocketService,
+  visualizationManager,
+  colorUtils,
+  linkUtils,
+  connectionAnalysis
 };

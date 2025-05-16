@@ -3,10 +3,11 @@
  */
 
 import store from '../state/store.js';
-import { toggleBloomEffect, toggleSummariesOnNodes, toggleEdgeLabels, toggleZoomOnSelect, toggleHelpCard } from './controls.js';
+import { toggleBloomEffect, toggleSummariesOnNodes, toggleEdgeLabels, toggleZoomOnSelect, toggleHelpCard, toggleVisualizationControlsPanel } from './controls.js';
 import { toggleMemoryDomainsPanel } from '../core/domainManagement/ui.js';
 import { toggleReferencePlane } from '../core/graph/referencePlane.js';
 import { refreshDataFromDatabaseChange } from '../utils/webSocketService.js';
+import { applyVisualizationStyle, getVisualizationStyles, getActiveVisualizationStyle } from '../core/visualizationManager.js';
 
 // Cache DOM elements
 let menuBarElement = null;
@@ -522,9 +523,234 @@ export function initMenuBar() {
     addSeparator(fileDropdown);
     
     fileDropdown.appendChild(
-      createDropdownItem('Export Graph (Not Implemented)', () => {
-        console.log('Export feature not yet implemented');
-      }, true)
+      createDropdownItem('Export Domain...', () => {
+        console.log('Export Domain clicked');
+        import('../core/domainManagement.js').then(domainManagement => {
+          console.log('Domain management imported');
+          // collectAllDomains returns a Promise, so we need to handle it properly
+          domainManagement.collectAllDomains().then(allDomains => {
+            console.log('Collected domains:', allDomains);
+            
+            if (!allDomains || allDomains.length === 0) {
+              alert('No domains available to export');
+              return;
+            }
+            
+            // Get node counts for domains
+            const domainCounts = domainManagement.getDomainNodeCounts();
+          
+          // Create domain selection dialog
+          const dialog = document.createElement('div');
+          dialog.className = 'modal-dialog';
+          dialog.innerHTML = `
+            <div class="dialog-content" style="width: 400px;">
+              <div class="dialog-header">
+                <h3>Export Domain</h3>
+                <button class="close-button">&times;</button>
+              </div>
+              <div class="dialog-body">
+                <div class="form-group">
+                  <label for="export-domain-select">Select Domain to Export:</label>
+                  <select id="export-domain-select" style="width: 100%; padding: 8px;">
+                    ${allDomains.map(domainId => {
+                      const nodeCount = domainCounts.get(domainId) || 0;
+                      return `<option value="${domainId}">${domainId} (${nodeCount} nodes)</option>`;
+                    }).join('')}
+                  </select>
+                </div>
+              </div>
+              <div class="dialog-footer">
+                <button class="primary-button" id="export-domain-btn">Export</button>
+                <button class="secondary-button" id="cancel-export-btn">Cancel</button>
+              </div>
+            </div>
+          `;
+          
+          document.body.appendChild(dialog);
+          
+          // Add event handlers after the dialog is added to DOM
+          document.getElementById('export-domain-btn').addEventListener('click', () => {
+            const selectedDomain = document.getElementById('export-domain-select').value;
+            fetch('/api/domains/' + selectedDomain + '/export')
+              .then(response => {
+                if (!response.ok) throw new Error('Export failed');
+                return response.blob();
+              })
+              .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = selectedDomain + '-export.json';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                document.body.removeChild(dialog);
+              })
+              .catch(error => {
+                alert('Export failed: ' + error.message);
+              });
+          });
+          
+          document.getElementById('cancel-export-btn').addEventListener('click', () => {
+            document.body.removeChild(dialog);
+          });
+          
+          // Also add close button handler
+          dialog.querySelector('.close-button').addEventListener('click', () => {
+            document.body.removeChild(dialog);
+          });
+          }).catch(error => {
+            console.error('Error collecting domains:', error);
+            alert('Error loading domains: ' + error.message);
+          }); // Close allDomains.then
+        }).catch(error => {
+          console.error('Error importing domain management:', error);
+          alert('Error loading module: ' + error.message);
+        }); // Close domainManagement.then
+      })
+    );
+    
+    fileDropdown.appendChild(
+      createDropdownItem('Import Domain...', () => {
+        // Create file input for importing
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.json';
+        fileInput.style.display = 'none';
+        
+        fileInput.addEventListener('change', (event) => {
+          const file = event.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              try {
+                const importData = JSON.parse(e.target.result);
+                
+                // Validate the structure
+                if (!importData.domain || !importData.nodes || !importData.edges) {
+                  throw new Error('Invalid import file format');
+                }
+                
+                // Show confirmation dialog
+                const confirmDialog = document.createElement('div');
+                confirmDialog.className = 'modal-dialog';
+                confirmDialog.innerHTML = `
+                  <div class="dialog-content" style="width: 500px;">
+                    <div class="dialog-header">
+                      <h3>Import Domain</h3>
+                      <button class="close-button">&times;</button>
+                    </div>
+                    <div class="dialog-body">
+                      <div class="import-info">
+                        <p><strong>Domain:</strong> ${importData.domain.name} (${importData.domain.id})</p>
+                        <p><strong>Nodes:</strong> ${importData.nodes.length}</p>
+                        <p><strong>Edges:</strong> ${importData.edges.length}</p>
+                        <p><strong>Export Date:</strong> ${new Date(importData.exportDate).toLocaleDateString()}</p>
+                      </div>
+                      <div class="form-info" style="margin-top: 15px;">
+                        <p>⚠️ If this domain already exists, nodes will be updated and new nodes will be added.</p>
+                      </div>
+                    </div>
+                    <div class="dialog-footer">
+                      <button class="primary-button" id="confirm-import-btn">Import</button>
+                      <button class="secondary-button" id="cancel-import-btn">Cancel</button>
+                    </div>
+                  </div>
+                `;
+                
+                document.body.appendChild(confirmDialog);
+                
+                // Add event handlers for dialog buttons
+                document.getElementById('cancel-import-btn').addEventListener('click', () => {
+                  document.body.removeChild(confirmDialog);
+                });
+                
+                confirmDialog.querySelector('.close-button').addEventListener('click', () => {
+                  document.body.removeChild(confirmDialog);
+                });
+                
+                // Handle import confirmation
+                document.getElementById('confirm-import-btn').addEventListener('click', () => {
+                  fetch('/api/domains/import', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(importData)
+                  })
+                  .then(response => response.json())
+                  .then(result => {
+                    document.body.removeChild(confirmDialog);
+                    
+                    if (result.success) {
+                      // Show success notification
+                      const notification = document.createElement('div');
+                      notification.className = 'success-notification';
+                      notification.innerHTML = `
+                        <div class="success-title">Import Successful</div>
+                        <div class="success-message">
+                          Domain "${result.domain}" imported successfully
+                        </div>
+                        <div class="success-details">
+                          Nodes: ${result.stats.nodesImported} imported, ${result.stats.nodesUpdated} updated<br>
+                          Edges: ${result.stats.edgesImported} imported, ${result.stats.edgesSkipped} skipped<br>
+                          ${result.stats.errors > 0 ? `Errors: ${result.stats.errors}` : ''}
+                        </div>
+                      `;
+                      
+                      notification.style.position = 'fixed';
+                      notification.style.bottom = '10px';
+                      notification.style.right = '10px';
+                      notification.style.backgroundColor = 'rgba(20, 60, 20, 0.95)';
+                      notification.style.color = 'white';
+                      notification.style.padding = '15px';
+                      notification.style.borderRadius = '5px';
+                      notification.style.zIndex = 2000;
+                      notification.style.maxWidth = '400px';
+                      notification.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.5)';
+                      notification.style.border = '1px solid rgba(100, 255, 100, 0.3)';
+                      
+                      document.body.appendChild(notification);
+                      
+                      // Refresh data
+                      import('../core/graph.js').then(graph => {
+                        graph.loadData(true);
+                      });
+                      
+                      import('../core/domainManagement.js').then(domainManagement => {
+                        domainManagement.updateMemoryDomainsPanel();
+                      });
+                      
+                      setTimeout(() => {
+                        if (document.body.contains(notification)) {
+                          document.body.removeChild(notification);
+                        }
+                      }, 8000);
+                    } else {
+                      alert('Import failed: ' + result.error);
+                    }
+                  })
+                  .catch(error => {
+                    document.body.removeChild(confirmDialog);
+                    alert('Import failed: ' + error.message);
+                  });
+                });
+                
+              } catch (error) {
+                alert('Error reading file: ' + error.message);
+              }
+            };
+            reader.readAsText(file);
+          }
+        });
+        
+        // Trigger file selection
+        document.body.appendChild(fileInput);
+        fileInput.click();
+        document.body.removeChild(fileInput);
+      })
     );
     
     // 2. View Menu
@@ -711,6 +937,24 @@ export function initMenuBar() {
     domainsItem.id = 'toggle-memory-domains';
     panelsDropdown.appendChild(domainsItem);
     
+    // Create function to toggle visualization controls panel
+    const wrappedToggleVizControls = () => {
+      // This now returns a boolean indicating the new state
+      const isVisible = toggleVisualizationControlsPanel();
+      
+      // Update menu item state
+      setTimeout(() => {
+        updateMenuItemState('toggle-viz-controls', isVisible);
+      }, 0);
+    };
+    
+    // Visualization Controls Panel
+    const vizControlsPanel = document.getElementById('visualization-controls-panel');
+    const vizControlsVisible = vizControlsPanel ? vizControlsPanel.style.display === 'block' : false;
+    const vizControlsItem = createDropdownItem('Visualization Controls', wrappedToggleVizControls, false, true, vizControlsVisible);
+    vizControlsItem.id = 'toggle-viz-controls';
+    panelsDropdown.appendChild(vizControlsItem);
+    
     // Help Card - gets initial state
     const helpCardVisible = store.get('showHelpCard') || false;
     const helpCardItem = createDropdownItem('Help Card', wrappedToggleHelpCard, false, true, helpCardVisible);
@@ -723,13 +967,51 @@ export function initMenuBar() {
     // Add items to Help dropdown
     helpDropdown.appendChild(
       createDropdownItem('About Memory Graph', () => {
-        alert('Memory Graph Visualizer\nA tool for visualizing memory connections.');
+        // Toggle the about dialog visibility
+        toggleAboutDialog();
       })
     );
+    
+    // 4. Visualization Menu
+    const { category: visualizationCategory, dropdown: visualizationDropdown } = createMenuCategory('Visualization');
+    
+    // Get all available visualization styles
+    const visualizationStyles = getVisualizationStyles();
+    const activeStyle = getActiveVisualizationStyle();
+    
+    // Add items to Visualization dropdown
+    visualizationStyles.forEach(style => {
+      const isActive = style.id === activeStyle;
+      const styleItem = createDropdownItem(style.name, () => {
+        // Apply the selected style
+        applyVisualizationStyle(style.id);
+        
+        // Update all menu items
+        visualizationStyles.forEach(s => {
+          updateMenuItemState(`visualization-style-${s.id}`, s.id === style.id);
+        });
+      }, false, true, isActive);
+      
+      styleItem.id = `visualization-style-${style.id}`;
+      visualizationDropdown.appendChild(styleItem);
+    });
+    
+    // Add separator
+    addSeparator(visualizationDropdown);
+    
+    // Add custom style option (future enhancement)
+    visualizationDropdown.appendChild(
+      createDropdownItem('Custom Style (Coming Soon)', () => {
+        console.log('Custom visualization style not yet implemented');
+      }, true)
+    );
+    
+    // 5. Help Menu - reuse the existing help menu
     
     // Add categories to menu bar
     menuBarElement.appendChild(fileCategory);
     menuBarElement.appendChild(viewCategory);
+    menuBarElement.appendChild(visualizationCategory);
     menuBarElement.appendChild(panelsCategory);
     menuBarElement.appendChild(helpCategory);
     
@@ -758,6 +1040,12 @@ export function setupMenuStateListeners() {
   updateMenuItemState('toggle-zoom-on-select', store.get('zoomOnSelect'));
   updateMenuItemState('toggle-reference-plane', store.get('referencePlane')?.visible || false);
   
+  // Visualization Menu States
+  const activeStyle = getActiveVisualizationStyle();
+  getVisualizationStyles().forEach(style => {
+    updateMenuItemState(`visualization-style-${style.id}`, style.id === activeStyle);
+  });
+  
   // Panels Menu States  
   
   // Explicitly check panel visibility with ternary to avoid issues with style.display being ""
@@ -782,12 +1070,134 @@ export function setupMenuStateListeners() {
     updateMenuItemState('toggle-memory-domains', isDomainLegendVisible);
   }
   
+  // Visualization controls panel visibility
+  const vizControlsPanel = document.getElementById('visualization-controls-panel');
+  if (vizControlsPanel) {
+    const isVizControlsPanelVisible = vizControlsPanel.style.display === 'block';
+    updateMenuItemState('toggle-viz-controls', isVizControlsPanelVisible);
+  }
+  
   // Help card visibility
   updateMenuItemState('toggle-help-card', store.get('showHelpCard'));
+}
+
+/**
+ * Toggle the About dialog visibility
+ */
+export function toggleAboutDialog() {
+  // Get or create the about dialog element
+  let aboutDialog = document.getElementById('about-dialog');
+  
+  if (!aboutDialog) {
+    // Create the about dialog if it doesn't exist
+    aboutDialog = document.createElement('div');
+    aboutDialog.id = 'about-dialog';
+    aboutDialog.style.position = 'absolute';
+    aboutDialog.style.top = '50%';
+    aboutDialog.style.left = '50%';
+    aboutDialog.style.transform = 'translate(-50%, -50%)';
+    aboutDialog.style.width = '500px';
+    aboutDialog.style.backgroundColor = 'rgba(20, 20, 30, 0.9)';
+    aboutDialog.style.borderRadius = '8px';
+    aboutDialog.style.padding = '15px';
+    aboutDialog.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.7)';
+    aboutDialog.style.zIndex = '2000';
+    aboutDialog.style.border = '1px solid rgba(100, 100, 255, 0.3)';
+    aboutDialog.style.fontFamily = "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+    aboutDialog.style.display = 'none';
+    
+    // Create header
+    const header = document.createElement('h3');
+    header.className = 'window-header drag-handle';
+    header.style.marginTop = '0';
+    header.style.borderBottom = '1px solid #5a5a8a';
+    header.style.paddingBottom = '12px';
+    header.style.color = '#aaccff';
+    header.style.fontSize = '18px';
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    header.style.cursor = 'move';
+    
+    // Add title
+    const title = document.createElement('span');
+    title.textContent = 'About Memory Graph Visualizer';
+    
+    // Add close button
+    const closeButton = document.createElement('span');
+    closeButton.id = 'about-dialog-close';
+    closeButton.className = 'close-icon';
+    closeButton.textContent = '✖';
+    closeButton.style.cursor = 'pointer';
+    closeButton.style.color = '#ff8888';
+    closeButton.addEventListener('click', toggleAboutDialog);
+    
+    // Add elements to header
+    header.appendChild(title);
+    header.appendChild(closeButton);
+    
+    // Create content container
+    const content = document.createElement('div');
+    content.className = 'about-content';
+    content.style.marginTop = '15px';
+    content.style.lineHeight = '1.6';
+    
+    // Add about content
+    content.innerHTML = `
+      <div style="display: flex; margin-bottom: 20px; align-items: center;">
+        <div style="flex: 1;">
+          <h2 style="margin-top: 0; color: #aaccff;">Memory Graph Visualizer</h2>
+          <p>A tool for performing ontological analysis of memory domains.</p>
+          <p style="color: #aaaaaa; font-size: 14px;">Version 2.0.1</p>
+        </div>
+      </div>
+      
+      <div style="margin-bottom: 20px;">
+        <h4 style="color: #ccddff; margin-bottom: 10px;">About This Tool</h4>
+        <p>The Memory Graph Visualizer enables you to analyze and explore relationships between memory domains through an interactive 3D graph visualization. This tool allows you to perform ontological analysis of memory structures, identify connections between domains, and understand the hierarchical organization of memory systems.</p>
+      </div>
+      
+      <div style="margin-bottom: 20px;">
+        <h4 style="color: #ccddff; margin-bottom: 10px;">Key Features</h4>
+        <ul style="padding-left: 20px; margin-top: 5px;">
+          <li>Interactive 3D visualization of memory domain relationships</li>
+          <li>Ontological analysis of domain hierarchies and associations</li>
+          <li>Domain-based color coding and filtering</li>
+          <li>Advanced graph analytics for connection patterns</li>
+          <li>Multi-node selection and batch operations</li>
+          <li>Custom visualization styles for different analysis approaches</li>
+        </ul>
+      </div>
+      
+      <div style="margin-bottom: 20px;">
+        <h4 style="color: #ccddff; margin-bottom: 10px;">How to Use</h4>
+        <p>Use the menu bar at the top of the interface to access features, toggle visualization settings, and manage database connections. Navigate the 3D space using mouse controls, and select nodes to view their content and connections. Check the "Help" menu for keyboard shortcuts and more information.</p>
+      </div>
+    `;
+    
+    // Assemble dialog
+    aboutDialog.appendChild(header);
+    aboutDialog.appendChild(content);
+    
+    // Add to document
+    document.body.appendChild(aboutDialog);
+    
+    // Make draggable
+    import('../ui/windowManager.js').then(windowManager => {
+      windowManager.makeDraggable('about-dialog', {
+        controls: [],
+        addHeader: false // We've already added a header
+      });
+    });
+  }
+  
+  // Toggle visibility
+  aboutDialog.style.display = aboutDialog.style.display === 'none' ? 'block' : 'none';
 }
 
 export default {
   initMenuBar,
   setupMenuStateListeners,
-  updateDatabaseChangeBadge
+  updateDatabaseChangeBadge,
+  toggleAboutDialog
 };

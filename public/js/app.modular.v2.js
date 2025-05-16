@@ -15,7 +15,9 @@ import {
   contextMenu,
   windowManager,
   menuBar,
-  helpers 
+  helpers,
+  visualizationManager,
+  visualizationControlsPanel
 } from './modules-v2/index.js';
 
 // Import WebSocket service
@@ -106,6 +108,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fetch link types
   linkManagement.fetchLinkTypes();
   
+  // Initialize visualization manager and visualization controls panel
+  visualizationManager.initializeVisualizationManager();
+  
+  // Initialize visualization controls panel (with a delay to ensure DOM is ready)
+  setTimeout(() => {
+    visualizationControlsPanel.initializeVisualizationControlsPanel();
+  }, 500);
+  
   // Initialize WebSocket connection
   webSocketService.initWebSocket();
   
@@ -158,6 +168,8 @@ document.addEventListener('DOMContentLoaded', () => {
       menuBar,
       helpers,
       webSocketService,
+      visualizationManager,
+      visualizationControlsPanel,
       getState: () => store.getState()
     };
     

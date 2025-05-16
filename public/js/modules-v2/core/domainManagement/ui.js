@@ -424,6 +424,48 @@ export function updateMemoryDomainsPanel() {
         
         itemControls.appendChild(editButton);
         
+        // Export button
+        const exportButton = document.createElement('span');
+        exportButton.textContent = '📥';
+        exportButton.title = 'Export domain';
+        exportButton.style.cursor = 'pointer';
+        exportButton.style.fontSize = '14px';
+        exportButton.style.opacity = '0.7';
+        exportButton.style.transition = 'opacity 0.2s';
+        
+        exportButton.addEventListener('mouseenter', () => {
+          exportButton.style.opacity = '1';
+        });
+        
+        exportButton.addEventListener('mouseleave', () => {
+          exportButton.style.opacity = '0.7';
+        });
+        
+        exportButton.addEventListener('click', () => {
+          // Export the domain
+          fetch(`/api/domains/${domain}/export`)
+            .then(response => {
+              if (!response.ok) throw new Error('Export failed');
+              return response.blob();
+            })
+            .then(blob => {
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.style.display = 'none';
+              a.href = url;
+              a.download = `${domain}-export.json`;
+              document.body.appendChild(a);
+              a.click();
+              window.URL.revokeObjectURL(url);
+              document.body.removeChild(a);
+            })
+            .catch(error => {
+              alert(`Export failed: ${error.message}`);
+            });
+        });
+        
+        itemControls.appendChild(exportButton);
+        
         // Delete button (only if domain has no nodes)
         if (nodeCount === 0) {
           const deleteButton = document.createElement('span');

@@ -175,20 +175,24 @@ export function updateCombinedHighlights() {
     selectedHighlightLinks,
     hoverHighlightNodes,
     hoverHighlightLinks,
-    multiSelectHighlightNodes
+    multiSelectHighlightNodes,
+    hoverNode
   } = store.getState();
   
   // Clear combined sets
   highlightNodes.clear();
   highlightLinks.clear();
   
-  // Add all selected highlights first
+  // Add selected highlights first - these stay even when mouse moves away
   selectedHighlightNodes.forEach(node => highlightNodes.add(node));
   selectedHighlightLinks.forEach(link => highlightLinks.add(link));
   
-  // Then add hover highlights
-  hoverHighlightNodes.forEach(node => highlightNodes.add(node));
-  hoverHighlightLinks.forEach(link => highlightLinks.add(link));
+  // Only add hover highlights if we have an active hover node
+  // This ensures highlights disappear when mouse leaves a node
+  if (hoverNode) {
+    hoverHighlightNodes.forEach(node => highlightNodes.add(node));
+    hoverHighlightLinks.forEach(link => highlightLinks.add(link));
+  }
   
   // Add multi-select highlights last
   multiSelectHighlightNodes.forEach(node => highlightNodes.add(node));
@@ -227,25 +231,59 @@ export function updateHighlight() {
     }];
   }
   
-  // Update the graph rendering - make the tentative link more noticeable
-  graph
-    .nodeColor(node => getNodeColor(node))
-    .linkColor(link => getLinkColor(link)) // Use our unified getLinkColor function
-    .linkWidth(link => {
-      if (link.type === 'potential_link') return 7; // Even thicker for potential links
-      return highlightLinks.has(link) ? 4 : 2.5;
-    })
-    .linkDirectionalParticles(link => {
-      if (link.type === 'potential_link') return 15; // More particles for potential links
-      return highlightLinks.has(link) ? 6 : 0;
-    })
-    .linkDirectionalParticleSpeed(link => {
-      if (link.type === 'potential_link') return 0.015; // Faster particles for potential links
-      return 0.005; // Normal speed for other links
-    })
-    .linkOpacity(link => {
-      return link.type === 'potential_link' ? 0.8 : 0.6; // Higher opacity for potential links
-    });
+  // Update only the affected properties instead of overriding all link styling
+  // This allows the visualization style to take precedence except for highlighting
+  
+  // Update node colors (this is always needed)
+  graph.nodeColor(node => getNodeColor(node));
+  
+  // For links, only update colors for highlighted links and potential links
+  // to avoid overriding the visualization style's settings
+  const currentStyle = store.get('visualizationStyle');
+  
+  // Always update link colors to ensure proper highlighting and un-highlighting
+  graph.linkColor(link => {
+    if (link.type === 'potential_link') {
+      return '#00ffff'; // Cyan for potential links
+    } else if (highlightLinks.has(link)) {
+      return '#ffffff'; // White for highlighted links
+    }
+    // For non-highlighted links, use the default styling from the visualization style
+    return getLinkColor(link);
+  });
+  
+  // Always update link width to ensure proper highlighting and un-highlighting
+  graph.linkWidth(link => {
+    if (link.type === 'potential_link') {
+      return 1.5; // Slightly thicker for potential links
+    } else if (highlightLinks.has(link)) {
+      return 1.5; // Slightly thicker for highlighted links
+    }
+    // For non-highlighted links, maintain the current visualization style width
+    return currentStyle?.linkWidth || 1.0;
+  });
+  
+  // Always update arrow properties to ensure proper highlighting and un-highlighting
+  graph.linkDirectionalArrowLength(link => {
+    if (link.type === 'potential_link') {
+      return 5; // Larger arrow for potential links
+    } else if (highlightLinks.has(link)) {
+      return 5; // Larger arrow for highlighted links
+    }
+    // For non-highlighted links, maintain the default arrow length from the style
+    return currentStyle?.linkDirectionalArrowLength || 3;
+  });
+  
+  // Always update arrow color to ensure proper highlighting and un-highlighting
+  graph.linkDirectionalArrowColor(link => {
+    if (link.type === 'potential_link') {
+      return '#00ffff'; // Cyan for potential links
+    } else if (highlightLinks.has(link)) {
+      return '#ffffff'; // White for highlighted links
+    }
+    // For non-highlighted links, use the link color
+    return getLinkColor(link);
+  });
     
   // Add or remove the virtual link
   const currentLinks = graph.graphData().links;

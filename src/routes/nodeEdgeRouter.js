@@ -626,6 +626,121 @@ router.delete('/nodes/:id', (req, res) => {
 });
 
 /**
+ * @route   POST /nodes/delete-batch
+ * @desc    Delete multiple nodes and their associated edges and tags in a single transaction
+ * @access  Public
+ */
+router.post('/nodes/delete-batch', (req, res) => {
+  console.log('==== [API] POST /api/nodes/delete-batch request received ====');
+  const { nodeIds } = req.body;
+  
+  console.log('[API] Deleting nodes with IDs:', nodeIds);
+  
+  if (!nodeIds || !Array.isArray(nodeIds) || nodeIds.length === 0) {
+    console.log('[API] POST /api/nodes/delete-batch error: Missing or invalid node IDs');
+    return res.status(400).json({ error: 'Missing or invalid node IDs' });
+  }
+  
+  // Use a single transaction for all deletions
+  dbService.executeWithRetry((db, callback) => {
+    db.serialize(() => {
+      db.run('BEGIN TRANSACTION');
+      
+      let totalEdgesDeleted = 0;
+      let totalTagsDeleted = 0;
+      let totalNodesDeleted = 0;
+      let errors = [];
+      
+      // Process each node deletion in sequence within the same transaction
+      const processNextNode = (index) => {
+        if (index >= nodeIds.length) {
+          // All nodes processed, commit the transaction
+          db.run('COMMIT', function(err) {
+            if (err) {
+              db.run('ROLLBACK');
+              return callback(err);
+            }
+            
+            callback(null, {
+              nodesDeleted: totalNodesDeleted,
+              edgesDeleted: totalEdgesDeleted,
+              tagsDeleted: totalTagsDeleted,
+              errors: errors
+            });
+          });
+          return;
+        }
+        
+        const nodeId = nodeIds[index];
+        
+        // Delete edges for this node
+        db.run('DELETE FROM MEMORY_EDGES WHERE source = ? OR target = ?', [nodeId, nodeId], function(err) {
+          if (err) {
+            errors.push(`Failed to delete edges for node ${nodeId}: ${err.message}`);
+            processNextNode(index + 1);
+            return;
+          }
+          
+          totalEdgesDeleted += this.changes;
+          console.log(`[API] Deleted ${this.changes} edges connected to node ${nodeId}`);
+          
+          // Delete tags for this node
+          db.run('DELETE FROM MEMORY_TAGS WHERE nodeId = ?', [nodeId], function(err) {
+            if (err) {
+              errors.push(`Failed to delete tags for node ${nodeId}: ${err.message}`);
+              processNextNode(index + 1);
+              return;
+            }
+            
+            totalTagsDeleted += this.changes;
+            console.log(`[API] Deleted ${this.changes} tags associated with node ${nodeId}`);
+            
+            // Delete the node itself
+            db.run('DELETE FROM MEMORY_NODES WHERE id = ?', [nodeId], function(err) {
+              if (err) {
+                errors.push(`Failed to delete node ${nodeId}: ${err.message}`);
+                processNextNode(index + 1);
+                return;
+              }
+              
+              totalNodesDeleted += this.changes;
+              console.log(`[API] Deleted node ${nodeId}, changes: ${this.changes}`);
+              
+              // Process next node
+              processNextNode(index + 1);
+            });
+          });
+        });
+      };
+      
+      // Start processing from the first node
+      processNextNode(0);
+    });
+  }, 3, (err, result) => {
+    if (err) {
+      console.error('[API] Error deleting nodes:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    
+    console.log('[API] Batch deletion completed');
+    console.log('  Nodes deleted:', result.nodesDeleted);
+    console.log('  Edges deleted:', result.edgesDeleted);
+    console.log('  Tags deleted:', result.tagsDeleted);
+    if (result.errors.length > 0) {
+      console.log('  Errors:', result.errors);
+    }
+    
+    res.json({
+      success: true,
+      nodesDeleted: result.nodesDeleted,
+      edgesDeleted: result.edgesDeleted,
+      tagsDeleted: result.tagsDeleted,
+      errors: result.errors
+    });
+  });
+});
+
+/**
  * @route   POST /tags
  * @desc    Add one or more tags to a node
  * @access  Public
