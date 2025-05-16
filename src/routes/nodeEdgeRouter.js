@@ -796,7 +796,7 @@ router.put('/nodes/:id', (req, res) => {
   }
   
   // Update the node content
-  const updateQuery = `UPDATE MEMORIES SET content = ? WHERE id = ?`;
+  const updateQuery = `UPDATE MEMORY_NODES SET content = ? WHERE id = ?`;
   
   dbService.executeWithRetry((db, callback) => {
     db.run(updateQuery, [content, nodeId], function(err) {
