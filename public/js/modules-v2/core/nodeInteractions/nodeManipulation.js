@@ -245,45 +245,26 @@ export function handleDeleteSelectedNodes() {
     () => {
       // Create a copy of the array to avoid issues during deletion
       const nodesToDelete = [...multiSelectedNodes];
-      let deletedCount = 0;
-      let errorCount = 0;
+      const nodeIds = nodesToDelete.map(node => node.id);
       
-      // Sequential deletion with Promise.all and fetch
-      const deletePromises = nodesToDelete.map(node => {
-        return fetch(`/api/nodes/${node.id}`, {
-          method: 'DELETE'
-        })
-        .then(response => response.json())
-        .then(result => {
-          if (result.success) {
-            console.log(`Node ${node.id} deleted successfully`);
-            deletedCount++;
-            return { success: true, node };
-          } else {
-            console.error(`Failed to delete node ${node.id}:`, result.error);
-            errorCount++;
-            return { success: false, node, error: result.error };
-          }
-        })
-        .catch(error => {
-          console.error(`Error deleting node ${node.id}:`, error);
-          errorCount++;
-          return { success: false, node, error };
-        });
-      });
-      
-      // Process all deletions
-      Promise.all(deletePromises)
-        .then(results => {
-          console.log(`Deleted ${deletedCount}/${nodesToDelete.length} nodes, ${errorCount} errors`);
+      // Use batch delete endpoint to avoid transaction conflicts
+      fetch('/api/nodes/delete-batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ nodeIds })
+      })
+      .then(response => response.json())
+      .then(result => {
+        if (result.success) {
+          console.log(`Batch deletion completed: ${result.nodesDeleted} nodes, ${result.edgesDeleted} edges, ${result.tagsDeleted} tags deleted`);
           
           // Remove deleted nodes from graph data
           const { graphData } = store.getState();
           
           // Get successfully deleted node IDs
-          const deletedNodeIds = results
-            .filter(result => result.success)
-            .map(result => result.node.id);
+          const deletedNodeIds = nodeIds.slice(0, result.nodesDeleted);
           
           // Remove nodes
           graphData.nodes = graphData.nodes.filter(node => !deletedNodeIds.includes(node.id));
@@ -322,8 +303,20 @@ export function handleDeleteSelectedNodes() {
           });
           
           // Show result
-          alert(`Deleted ${deletedCount} nodes, ${errorCount} errors`);
-        });
+          if (result.errors && result.errors.length > 0) {
+            alert(`Deleted ${result.nodesDeleted}/${nodesToDelete.length} nodes. Errors: ${result.errors.join(', ')}`);
+          } else {
+            alert(`Successfully deleted ${result.nodesDeleted} nodes`);
+          }
+        } else {
+          console.error('Batch deletion failed:', result.error);
+          alert('Failed to delete nodes: ' + (result.error || 'Unknown error'));
+        }
+      })
+      .catch(error => {
+        console.error('Error in batch deletion:', error);
+        alert('Error deleting nodes: ' + error.message);
+      });
     }
   );
 }
