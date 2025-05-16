@@ -210,6 +210,71 @@ router.post('/domains/create', (req, res) => {
 });
 
 /**
+ * @route   DELETE /domains/:domainId
+ * @desc    Delete an empty domain
+ * @access  Public
+ */
+router.delete('/domains/:domainId', (req, res) => {
+  console.log('==== [API] DELETE /api/domains/:domainId request received ====');
+  const { domainId } = req.params;
+  
+  console.log('[API] Deleting domain:', domainId);
+  
+  if (!domainId) {
+    console.log('[API] Delete domain error: Missing domain ID');
+    return res.status(400).json({ error: 'Missing domain ID' });
+  }
+  
+  // First check if the domain has any nodes
+  const checkNodesQuery = `
+    SELECT COUNT(*) as count FROM MEMORY_NODES WHERE domain = ?
+  `;
+  
+  dbService.executeWithRetry((db, callback) => {
+    db.get(checkNodesQuery, [domainId], callback);
+  }, 3, (err, result) => {
+    if (err) {
+      console.error('[API] Error checking domain nodes:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    
+    if (result.count > 0) {
+      console.log(`[API] Cannot delete domain '${domainId}' - contains ${result.count} nodes`);
+      return res.status(400).json({ 
+        error: 'Cannot delete non-empty domain', 
+        nodeCount: result.count 
+      });
+    }
+    
+    // Domain is empty, proceed with deletion
+    const deleteQuery = `DELETE FROM DOMAINS WHERE id = ?`;
+    
+    dbService.executeWithRetry((db, callback) => {
+      db.run(deleteQuery, [domainId], function(err) {
+        if (err) {
+          callback(err);
+        } else {
+          callback(null, { changes: this.changes });
+        }
+      });
+    }, 3, (deleteErr, deleteResult) => {
+      if (deleteErr) {
+        console.error('[API] Error deleting domain:', deleteErr.message);
+        return res.status(500).json({ error: deleteErr.message });
+      }
+      
+      if (deleteResult.changes === 0) {
+        console.log('[API] Domain not found');
+        return res.status(404).json({ error: 'Domain not found' });
+      }
+      
+      console.log(`[API] Domain '${domainId}' deleted successfully`);
+      res.json({ success: true, deleted: true, domain: domainId });
+    });
+  });
+});
+
+/**
  * @route   GET /domains/:domainId/export
  * @desc    Export a memory domain with all its nodes and edges
  * @access  Public
