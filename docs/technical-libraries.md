@@ -4,6 +4,10 @@
 
 The Memory Graph Interface is built using a carefully selected set of libraries that focus on 3D graph visualization and real-time data management. The application follows a vanilla JavaScript approach without traditional UI frameworks, prioritizing performance and direct control over the visualization layer.
 
+## Project Inspiration
+
+This project was inspired by the excellent [3d-force-graph](https://github.com/vasturiano/3d-force-graph) library created by Vasco Asturiano. The library's elegant API and powerful visualization capabilities provided the foundation for building a specialized memory graph visualization tool. We extend our gratitude to the maintainers and contributors of this outstanding open-source project.
+
 ## Core Visualization Libraries
 
 ### 3D Force Graph
