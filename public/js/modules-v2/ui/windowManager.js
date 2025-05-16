@@ -491,6 +491,29 @@ const createControlHandlers = {
       textarea.style.fontFamily = 'inherit';
       textarea.style.resize = 'vertical';
       
+      // Auto-size the textarea based on content
+      const adjustTextareaHeight = () => {
+        textarea.style.height = 'auto';
+        const newHeight = Math.min(textarea.scrollHeight, window.innerHeight * 0.6);
+        textarea.style.height = newHeight + 'px';
+        
+        // If content exceeds max height, show scrollbar
+        if (textarea.scrollHeight > window.innerHeight * 0.6) {
+          textarea.style.overflowY = 'auto';
+        } else {
+          textarea.style.overflowY = 'hidden';
+        }
+      };
+      
+      // Initial size adjustment
+      textarea.style.height = '0px';
+      requestAnimationFrame(() => {
+        adjustTextareaHeight();
+      });
+      
+      // Adjust height on input
+      textarea.addEventListener('input', adjustTextareaHeight);
+      
       // Replace the content div with the textarea
       nodeContentDiv.style.display = 'none';
       nodeContentDiv.parentNode.insertBefore(textarea, nodeContentDiv.nextSibling);
