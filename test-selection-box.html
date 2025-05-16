@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Selection Box</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        #graph-container {
+            width: 800px;
+            height: 600px;
+            border: 2px solid #333;
+            position: relative;
+            background: #000020;
+        }
+        .instructions {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f0f0f0;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="instructions">
+        <h2>Selection Box Test</h2>
+        <p>Instructions:</p>
+        <ul>
+            <li>Hold <strong>Shift</strong> and drag on the background to create a selection box</li>
+            <li>Release the mouse to select all nodes within the box</li>
+            <li>Control+click still rotates the camera</li>
+            <li>Shift+click on a node still adds it to selection</li>
+        </ul>
+    </div>
+    <div id="graph-container"></div>
+    
+    <p>Current Selection: <span id="selection-count">0</span> nodes</p>
+    
+    <script>
+        // Simple mock to test the selection box behavior
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('graph-container');
+            const canvas = document.createElement('canvas');
+            canvas.width = 800;
+            canvas.height = 600;
+            container.appendChild(canvas);
+            
+            console.log('Test page loaded. The actual implementation requires the full graph system.');
+        });
+    </script>
+</body>
+</html>

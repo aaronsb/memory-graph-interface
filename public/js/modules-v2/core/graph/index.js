@@ -13,6 +13,7 @@ import * as interactions from './interactions.js';
 import * as dragHandling from './dragHandling.js';
 import * as events from './events.js';
 import * as referencePlane from './referencePlane.js';
+import * as selectionBox from './selectionBox.js';
 
 // Initialize event listeners
 events.setupEventListeners();
@@ -53,6 +54,11 @@ export const {
   cleanupReferencePlane
 } = referencePlane;
 
+export const {
+  initSelectionBox,
+  cleanupSelectionBox
+} = selectionBox;
+
 // Export default object with all functions
 export default {
   // Initialization
@@ -82,5 +88,9 @@ export default {
   toggleReferencePlane,
   updateReferencePlane,
   positionPlaneBelowNodes,
-  cleanupReferencePlane
+  cleanupReferencePlane,
+  
+  // Selection Box
+  initSelectionBox,
+  cleanupSelectionBox
 };
