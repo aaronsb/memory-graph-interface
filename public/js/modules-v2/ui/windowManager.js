@@ -5,6 +5,7 @@
  * Uses an event-based architecture to avoid circular dependencies.
  */
 import * as eventBus from '../utils/eventBus.js';
+import store from '../state/store.js';
 
 // Event names
 const EVENTS = {
@@ -461,6 +462,147 @@ const createControlHandlers = {
     };
   },
   
+  editNodeContent: () => {
+    return () => {
+      // Get the current content and node ID
+      const nodeContentDiv = document.getElementById('node-content');
+      const nodeId = document.getElementById('node-id')?.textContent;
+      
+      if (!nodeContentDiv || !nodeId || nodeId === 'No Node Selected') {
+        console.error('No node selected for editing');
+        return;
+      }
+      
+      // Store the original content
+      const originalContent = nodeContentDiv.textContent || '';
+      
+      // Create a textarea to replace the content div
+      const textarea = document.createElement('textarea');
+      textarea.value = originalContent;
+      textarea.style.width = '100%';
+      textarea.style.minHeight = '200px';
+      textarea.style.padding = '12px';
+      textarea.style.backgroundColor = 'rgba(40, 40, 60, 0.7)';
+      textarea.style.color = '#f0f0f0';
+      textarea.style.border = '1px solid rgba(100, 100, 255, 0.3)';
+      textarea.style.borderRadius = '6px';
+      textarea.style.fontSize = '14px';
+      textarea.style.lineHeight = '1.6';
+      textarea.style.fontFamily = 'inherit';
+      textarea.style.resize = 'vertical';
+      
+      // Replace the content div with the textarea
+      nodeContentDiv.style.display = 'none';
+      nodeContentDiv.parentNode.insertBefore(textarea, nodeContentDiv.nextSibling);
+      
+      // Create control buttons
+      const controlsDiv = document.createElement('div');
+      controlsDiv.style.marginTop = '10px';
+      controlsDiv.style.display = 'flex';
+      controlsDiv.style.gap = '10px';
+      controlsDiv.style.justifyContent = 'flex-end';
+      
+      // Commit button
+      const commitBtn = document.createElement('button');
+      commitBtn.innerHTML = '✓';
+      commitBtn.title = 'Save changes';
+      commitBtn.style.backgroundColor = '#4CAF50';
+      commitBtn.style.color = 'white';
+      commitBtn.style.border = 'none';
+      commitBtn.style.padding = '8px 16px';
+      commitBtn.style.borderRadius = '4px';
+      commitBtn.style.cursor = 'pointer';
+      commitBtn.style.fontSize = '16px';
+      
+      // Cancel button
+      const cancelBtn = document.createElement('button');
+      cancelBtn.innerHTML = '✗';
+      cancelBtn.title = 'Cancel changes';
+      cancelBtn.style.backgroundColor = '#f44336';
+      cancelBtn.style.color = 'white';
+      cancelBtn.style.border = 'none';
+      cancelBtn.style.padding = '8px 16px';
+      cancelBtn.style.borderRadius = '4px';
+      cancelBtn.style.cursor = 'pointer';
+      cancelBtn.style.fontSize = '16px';
+      
+      controlsDiv.appendChild(commitBtn);
+      controlsDiv.appendChild(cancelBtn);
+      textarea.parentNode.insertBefore(controlsDiv, textarea.nextSibling);
+      
+      // Focus the textarea and select all text
+      textarea.focus();
+      textarea.select();
+      
+      // Function to restore original view
+      const restoreView = () => {
+        textarea.remove();
+        controlsDiv.remove();
+        nodeContentDiv.style.display = 'block';
+      };
+      
+      // Commit button click handler
+      commitBtn.addEventListener('click', async () => {
+        const newContent = textarea.value;
+        
+        if (newContent !== originalContent) {
+          try {
+            // Send update request to server
+            const response = await fetch(`/api/nodes/${nodeId}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ content: newContent })
+            });
+            
+            if (response.ok) {
+              // Update the content display
+              nodeContentDiv.textContent = newContent;
+              
+              // Update the node in store
+              const selectedNode = store.get('selectedNode');
+              if (selectedNode) {
+                selectedNode.content = newContent;
+                store.set('selectedNode', selectedNode);
+              }
+              
+              // Update the graph data
+              const graphData = store.get('graphData');
+              const nodeInGraph = graphData.nodes.find(n => n.id === nodeId);
+              if (nodeInGraph) {
+                nodeInGraph.content = newContent;
+              }
+              
+              console.log('Node content updated successfully');
+            } else {
+              throw new Error('Failed to update node content');
+            }
+          } catch (error) {
+            console.error('Error updating node content:', error);
+            alert('Failed to update node content. Please try again.');
+            return;
+          }
+        }
+        
+        restoreView();
+      });
+      
+      // Cancel button click handler
+      cancelBtn.addEventListener('click', () => {
+        restoreView();
+      });
+      
+      // ESC key to cancel
+      textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          restoreView();
+        }
+      });
+    };
+  },
+  
   closeInfoPanel: () => {
     return (win) => {
       win.style.display = 'none';
@@ -488,6 +630,12 @@ export function initializeDraggableWindows() {
   // Info panel
   makeDraggable('info-panel', {
     controls: [
+      {
+        icon: '✏️',
+        title: 'Edit node content',
+        className: 'edit-button',
+        onClick: createControlHandlers.editNodeContent()
+      },
       { 
         icon: '📋', 
         title: 'Copy to clipboard',
