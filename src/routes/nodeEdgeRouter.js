@@ -776,4 +776,50 @@ router.post('/tags', (req, res) => {
   });
 });
 
+/**
+ * @route   PUT /nodes/:id
+ * @desc    Update a node's content
+ * @access  Public
+ */
+router.put('/nodes/:id', (req, res) => {
+  console.log('==== [API] PUT /api/nodes/:id request received ====');
+  console.log('[API] Node ID:', req.params.id);
+  console.log('[API] Request body:', JSON.stringify(req.body, null, 2));
+  
+  const nodeId = req.params.id;
+  const { content } = req.body;
+  
+  // Validate required fields
+  if (!nodeId || content === undefined) {
+    console.log('[API] PUT /api/nodes/:id error: Missing required fields');
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  
+  // Update the node content
+  const updateQuery = `UPDATE MEMORIES SET content = ? WHERE id = ?`;
+  
+  dbService.executeWithRetry((db, callback) => {
+    db.run(updateQuery, [content, nodeId], function(err) {
+      if (err) {
+        callback(err);
+      } else {
+        callback(null, { changes: this.changes });
+      }
+    });
+  }, 3, (err, result) => {
+    if (err) {
+      console.error('[API] Error updating node content:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    
+    if (result.changes === 0) {
+      console.log('[API] Node not found:', nodeId);
+      return res.status(404).json({ error: 'Node not found' });
+    }
+    
+    console.log('[API] Node content updated successfully:', nodeId);
+    res.json({ success: true, nodeId });
+  });
+});
+
 module.exports = router;
