@@ -11,6 +11,7 @@ import { setupLinkInteractions } from './interactions.js';
 import { setupDragHandling } from './dragHandling.js';
 import { addReferencePlane } from './referencePlane.js';
 import { initializeVisualizationManager, applyVisualizationStyle } from '../visualizationManager.js';
+import { initSelectionBox } from './selectionBox.js';
 
 /**
  * Initialize the 3D force graph
@@ -110,6 +111,9 @@ export function initGraph() {
   store.update({
     graph
   });
+  
+  // Initialize selection box functionality
+  initSelectionBox(graph);
   
   // Apply the saved visualization style after graph is initialized
   const activeStyle = store.get('visualizationStyle')?.id || 'simple';
