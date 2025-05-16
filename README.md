@@ -25,6 +25,10 @@ Click the image above to watch a demonstration of the Memory Graph Interface bei
 - **Real-time Updates**: Automatically detect changes to the underlying database
 - **Visual Effects**: Toggle bloom effect for enhanced visualization
 - **Multi-domain Support**: Visualize connections across different memory domains
+- **Export/Import Domains**: Export individual memory domains as JSON files and import them to other databases
+  - Export entire domains with nodes, edges, and tags
+  - Import domains with collision handling - existing nodes get updated
+  - Cross-domain edges excluded from exports to maintain domain independence
 
 ## Getting Started
 
@@ -181,6 +185,17 @@ For more details on contributing to this project, see [CONTRIBUTING.md](CONTRIBU
 - **Refresh Data**: Click the "Refresh Data" button to manually update the visualization
 - **Toggle Effects**: Use the "Toggle Bloom" button to enable/disable the bloom visual effect
 - **Select Database**: In the File menu, select "Open Database" to choose a different database file using the file browser
+- **Export Domain**: 
+  - From the File menu, select "Export Domain..."
+  - Choose a domain from the dropdown list
+  - Click Export to download the domain as a JSON file
+  - Alternatively, click the 📥 icon next to any domain in the Memory Domains panel
+- **Import Domain**:
+  - From the File menu, select "Import Domain..."
+  - Choose a JSON file exported from Memory Graph
+  - Review the import preview showing nodes and edges
+  - Click Import to add the domain to your current database
+  - Existing nodes will be updated, new nodes will be created
 
 ## Multi-Agent Support
 
